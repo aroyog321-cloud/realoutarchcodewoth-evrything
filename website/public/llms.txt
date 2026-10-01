@@ -1,0 +1,38 @@
+# OUTARCH
+
+> One command center for your terminals, dev servers, tests, and AI coding agents on Windows.
+
+## Overview
+
+OUTARCH is a developer workstation application designed for Windows 11. It organizes command-line tasks, long-running processes (dev servers, test watchers, databases), and autonomous AI coding agents into a supervised workspace. When an agent or task encounters an error, finishes a job, or requests user confirmation, OUTARCH alerts the developer so they can intervene promptly without constantly switching windows.
+
+- **Website**: https://outarch.com
+- **Operating System**: Windows 11 (requires Node.js 22 LTS)
+- **Architecture**: Local-first execution; code and terminals remain on the user's computer.
+
+## Key Features
+
+- **Multi-Terminal Supervision**: Run dev servers, test runners, build tools, and AI agents side by side in a structured grid.
+- **Attention Queue ("Needs You")**: Centralized inbox that surfaces processes requiring user input, such as agent permission prompts, failed test suites, or completed recipes.
+- **AI Agent Integration**: Works with any CLI-based coding agent without proxying or modifying terminal behavior. Supported agents include Claude Code, OpenAI Codex CLI, Gemini CLI, OpenCode, GitHub Copilot, Cursor, Goose, and Aider.
+- **Project Memory (`arch_memory.md`)**: Structured Markdown file stored in the repository to provide context and history across multiple agent sessions and manual coding workflows.
+- **Mobile Companion**: Local web application that pairs over the local Wi-Fi network to monitor process statuses, view output summaries, and run saved recipes from a phone without routing through cloud servers.
+- **VS Code Bridge**: Extension bridging editor diagnostics and terminal status to OUTARCH locally.
+
+## Privacy & Data Handling
+
+- Terminal output, files, and project operations execute locally on the user's machine.
+- No terminal relay through remote servers.
+- When using Mission AI assistant features, context is sent directly to the selected model provider; secret files and tokens are excluded by default.
+
+## Public Pages
+
+- Homepage & Interactive Simulation: https://outarch.com/
+- Pricing & Plan Comparison: https://outarch.com/pricing
+- Mobile Companion Setup: https://outarch.com/mobile
+- Plan Upgrade Policy: https://outarch.com/upgrades
+- Legal & Privacy Center: https://outarch.com/legal
+- AI & Developer Data Policy: https://outarch.com/ai-data
+- Security Policy: https://outarch.com/security
+- Terms of Service: https://outarch.com/terms
+- Privacy Policy: https://outarch.com/privacy

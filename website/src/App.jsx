@@ -6,6 +6,7 @@ import Footer from './components/Footer.jsx';
 import Nav from './components/Nav.jsx';
 import { Lockup } from './components/Brand.jsx';
 import { Link, scrollToId, useRouter } from './lib/router.jsx';
+import { updatePageMetadata } from './lib/seo.js';
 import Home from './pages/Home.jsx';
 
 // Pages other than the home page load on demand.
@@ -13,6 +14,8 @@ const PricingPage = lazy(() => import('./pages/PricingPage.jsx'));
 const CheckoutPage = lazy(() => import('./pages/CheckoutPage.jsx'));
 const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
 const AccountPage = lazy(() => import('./pages/AccountPage.jsx'));
+const MobilePage = lazy(() => import('./pages/MobilePage.jsx'));
+const UpgradePolicyPage = lazy(() => import('./pages/UpgradePolicyPage.jsx'));
 const LegalPage = lazy(() => import('./pages/LegalPage.jsx'));
 const NotFound = lazy(() => import('./pages/NotFound.jsx'));
 
@@ -45,6 +48,8 @@ function page(path) {
   if (path === '/checkout' || path === '/checkout/return') return CheckoutPage;
   if (path === '/auth') return AuthPage;
   if (path === '/account') return AccountPage;
+  if (path === '/mobile') return MobilePage;
+  if (path === '/upgrades' || path === '/upgrade-policy') return UpgradePolicyPage;
   if (LEGAL.has(path)) return LegalPage;
   return NotFound;
 }
@@ -55,7 +60,10 @@ const TITLES = {
   '/checkout': 'Checkout | OUTARCH',
   '/checkout/return': 'Payment | OUTARCH',
   '/auth': 'Sign in | OUTARCH',
-  '/account': 'Your account | OUTARCH',
+  '/account': 'Dashboard | OUTARCH',
+  '/mobile': 'Mobile companion | OUTARCH',
+  '/upgrades': 'Plan Upgrade & Credit Conversion | OUTARCH',
+  '/upgrade-policy': 'Plan Upgrade & Credit Conversion | OUTARCH',
   ...Object.fromEntries(Object.entries(LEGAL_TITLES).map(([to, title]) => [to, `${title} | OUTARCH`])),
 };
 
@@ -85,7 +93,7 @@ export default function App() {
   const focused = path === '/auth' && query.get('client') === 'desktop';
 
   useSmoothScroll();
-  useEffect(() => { document.title = TITLES[path] || 'OUTARCH'; }, [path]);
+  useEffect(() => { updatePageMetadata(path); }, [path]);
   useEffect(() => {
     if (!hash) return undefined;
     const timer = window.setTimeout(() => scrollToId(hash.slice(1)), 120);

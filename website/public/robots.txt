@@ -1,0 +1,12 @@
+# robots.txt for OUTARCH (https://outarch.com)
+User-agent: *
+Allow: /
+
+# Disallow private and transactional application routes
+Disallow: /account
+Disallow: /auth
+Disallow: /checkout
+Disallow: /checkout/
+Disallow: /checkout/return
+
+Sitemap: https://outarch.com/sitemap.xml
