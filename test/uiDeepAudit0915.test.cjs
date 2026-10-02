@@ -14,7 +14,7 @@ const { test } = require("node:test");
 const { buildProjectMemory } = require("../src/engine/projectMemory.cjs");
 
 const renderer = path.resolve(__dirname, "../src/groundstation/renderer");
-const read = file => fs.readFileSync(path.join(renderer, file), "utf8");
+const read = file => fs.readFileSync(path.join(renderer, file), "utf8").replace(/\r\n/g, "\n");
 
 test("closing the Groundstation inspector is not undone by the selection seed", () => {
   const app = read("App.jsx");

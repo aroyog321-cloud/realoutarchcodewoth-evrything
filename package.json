@@ -1,6 +1,6 @@
 {
   "name": "termctl-tui",
-  "version": "2.19.0",
+  "version": "2.19.1",
   "type": "module",
   "description": "OUTARCH — a local-first developer command center with a shared PTY engine, TUI, and desktop client.",
   "bin": {

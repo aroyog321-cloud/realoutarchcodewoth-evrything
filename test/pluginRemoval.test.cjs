@@ -12,7 +12,7 @@ const { METHODS } = require("../src/protocol/index.cjs");
 const { buildDecisionQuery, CONFIRMED_SOURCES } = require("../src/protocol/decisionBroker.cjs");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 
 test("no plugin service, renderer surface or stylesheet ships", () => {
   for (const rel of [

@@ -13,7 +13,7 @@ const { test } = require("node:test");
 const { NotificationCenter, fromSemanticEvent } = require("../src/service/notificationCenter.cjs");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 const renderer = rel => read(`src/groundstation/renderer/${rel}`);
 
 test("the main process confirms the account before it opens a project", () => {

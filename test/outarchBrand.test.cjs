@@ -13,7 +13,7 @@ const { test } = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 const renderer = path.join(root, "src/groundstation/renderer");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 
 function walk(directory, keep) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

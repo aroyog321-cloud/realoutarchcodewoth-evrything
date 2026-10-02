@@ -14,7 +14,7 @@ const { pathToFileURL } = require("node:url");
 const { test } = require("node:test");
 
 const renderer = path.resolve(__dirname, "../src/groundstation/renderer");
-const read = file => fs.readFileSync(path.join(renderer, file), "utf8");
+const read = file => fs.readFileSync(path.join(renderer, file), "utf8").replace(/\r\n/g, "\n");
 
 test("every dialog paints above its own backdrop", () => {
   const surfaces = read("redesign/surfaces.css");

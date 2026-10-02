@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  AndroidLogo, ArrowRight, CaretDown, Code, Copy, DeviceMobile, DownloadSimple, QrCode, ShieldCheck, WindowsLogo, Check,
+  AndroidLogo, ArrowRight, CaretDown, Code, DeviceMobile, DownloadSimple, QrCode, ShieldCheck, WindowsLogo,
 } from '@phosphor-icons/react';
 import { PlanCards, PricingControls } from '../components/Pricing.jsx';
 import { Button, EASE, Reveal, SectionTitle, useSpotlight } from '../components/ui.jsx';
@@ -27,14 +27,6 @@ export function PricingSection() {
 
 // ------------------------------------------------------------------ download
 
-function CopyLine({ text }) {
-  const [copied, setCopied] = useState(false);
-  return <button type="button" onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1600); }).catch(() => {}); }} className="group flex w-full items-center gap-2 rounded-field bg-black/50 px-3 py-2.5 text-left font-term text-[12px] text-fg-soft shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]" aria-label={`Copy: ${text}`}>
-    <span className="min-w-0 flex-1 truncate">{text}</span>
-    {copied ? <Check size={15} className="text-brand-mint"/> : <Copy size={15} className="text-fg-dim group-hover:text-fg"/>}
-  </button>;
-}
-
 export function DownloadSection() {
   const { release, androidApkUrl, microsoftStoreId, loading } = useCatalog();
   // Once the app is listed, Windows installs come from the Microsoft Store.
@@ -58,7 +50,7 @@ export function DownloadSection() {
             {(store ? STORE_STEPS : [
               ['Download and extract the ZIP', 'Any folder works, for example D:\\Apps\\OUTARCH.'],
               ['Run OPEN_OUTARCH_WINDOWS.cmd', 'The first run installs what OUTARCH needs, which takes a few minutes. It requires Node.js 22.12 or newer (22 LTS).'],
-              ['Sign in from your browser', 'Create a free account with email or Google. Your browser sends you back to the app.'],
+              ['Sign in when OUTARCH opens', 'The app opens this website so you can create a free account or sign in, then your browser sends you back.'],
               ['Open your project', 'Add your terminals and agents. New versions are offered inside the app, signed and verified.'],
             ]).map(([title, body], index) => <li key={title} className="flex gap-3">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[12.5px] text-fg-soft shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]">{index + 1}</span>
@@ -77,9 +69,9 @@ export function DownloadSection() {
                 <a href={NODE_22_URL} target="_blank" rel="noreferrer" className="link-underline text-[14px] text-fg-muted hover:text-fg">Get Node.js 22 LTS</a>
               </div>
               : <div className="rounded-field bg-white/[0.04] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
-                <p className="text-[15px] font-medium">{loading ? 'Looking up the latest build…' : 'The first public build is being prepared.'}</p>
-                {!loading ? <p className="mt-1 text-[14px] text-fg-muted">The download will appear here once it's published. Create your free account now so you can sign in on day one.</p> : null}
-                {!loading ? <div className="mt-4"><Button to="/auth?mode=signup" variant="glass" size="sm">Create a free account<ArrowRight size={15}/></Button></div> : null}
+                <p className="text-[15px] font-medium">{loading ? 'Looking up the latest build…' : 'The Windows download is almost ready.'}</p>
+                {!loading ? <p className="mt-1 text-[14px] text-fg-muted">It appears here as soon as it is published. You do not need an account to download: the app asks you to sign in the first time it opens.</p> : null}
+                {!loading ? <div className="mt-4"><Button to="/#demo" variant="glass" size="sm">Try the live demo meanwhile<ArrowRight size={15}/></Button></div> : null}
               </div>}
             <p className="mt-4 text-[13px] leading-relaxed text-fg-dim">By downloading and using OUTARCH you agree to the <Link to="/terms" className="link-underline text-fg-muted hover:text-fg">Terms of service</Link> and the <Link to="/eula" className="link-underline text-fg-muted hover:text-fg">licence</Link>. The app asks you to confirm when it first starts. See the <Link to="/privacy" className="link-underline text-fg-muted hover:text-fg">privacy policy</Link> for what it sends and when.</p>
             {!store && release?.sha256 ? <p className="mt-4 flex items-center gap-2 font-mono text-[11.5px] text-fg-dim"><ShieldCheck size={14} className="text-brand-mint"/>SHA-256 {release.sha256.slice(0, 16)}…{release.sha256.slice(-8)}</p> : null}
@@ -98,10 +90,10 @@ export function DownloadSection() {
               {['In OUTARCH, open Integrations, then Mobile Companion.', 'Scan the QR code with your phone on the same network.', 'Check the 6-digit code matches, tap Pair this phone, then add it to your home screen.'].map((step, index) => <li key={step} className="flex gap-2.5"><span className="font-mono text-[12.5px] text-brand-mint">{index + 1}</span>{step}</li>)}
             </ol>
             <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Button to="/mobile" variant="mint" size="sm" magnetic={false}><DeviceMobile size={16} weight="bold"/>Install the mobile app</Button>
               {androidApkUrl
-                ? <Button href={androidApkUrl} variant="mint" size="sm" magnetic={false} download><AndroidLogo size={16} weight="fill"/>Download for Android</Button>
-                : null}
-              <span className="chip"><QrCode size={14}/>Pairs by QR code</span>
+                ? <Button href={androidApkUrl} variant="glass" size="sm" magnetic={false} download><AndroidLogo size={16} weight="fill"/>Android APK</Button>
+                : <span className="chip"><QrCode size={14}/>Pairs by QR code</span>}
             </div>
             <p className="mt-4 text-[13px] text-fg-dim"><Link to="/mobile-privacy" className="link-underline text-fg-muted hover:text-fg">Mobile privacy and permissions</Link></p>
           </article>
@@ -112,8 +104,8 @@ export function DownloadSection() {
               <span className="grid h-11 w-11 place-items-center rounded-[13px] bg-brand-violet/10 text-brand-violet shadow-[inset_0_0_0_1px_rgba(155,123,255,0.35)]"><Code size={22} weight="duotone"/></span>
               <div><h3 className="text-[18px] font-semibold">VS Code bridge</h3><p className="text-[13.5px] text-fg-muted">Ultimate</p></div>
             </div>
-            <p className="mt-4 text-[14.5px] leading-relaxed text-fg-muted">The extension ships inside the download. Install it once, then connect it in OUTARCH under <span className="text-fg-soft">Integrations, VS Code Bridge</span>.</p>
-            <div className="mt-4"><CopyLine text="code --install-extension integrations\vscode\outarch-bridge-1.0.0.vsix"/></div>
+            <p className="mt-4 text-[14.5px] leading-relaxed text-fg-muted">The extension is on its way to the official VS Code Marketplace. Once it is listed, install it from VS Code in one click, then connect it in OUTARCH under <span className="text-fg-soft">Integrations, VS Code Bridge</span>.</p>
+            <div className="mt-4"><span className="chip"><Code size={14}/>Coming soon to the VS Code Marketplace</span></div>
             <p className="mt-4 text-[13px] text-fg-dim">It shares file paths, diagnostics, Git state and VS Code terminal activity with the app on this computer, never file contents. <Link to="/ai-data#vs-code-bridge" className="link-underline text-fg-muted hover:text-fg">What it shares</Link></p>
           </article>
         </Reveal>
@@ -129,13 +121,13 @@ const NODE_22_URL = 'https://nodejs.org/dist/latest-v22.x/';
 const STORE_STEPS = [
   ['Download for Windows', 'Your browser saves a small installer from Microsoft. Open it.'],
   ['The Microsoft Store installs OUTARCH', 'Signed and delivered by Microsoft. Nothing else to set up, and no Node.js needed.'],
-  ['Sign in from your browser', 'Create a free account with email or Google. Your browser sends you back to the app.'],
+  ['Sign in when OUTARCH opens', 'The app opens this website so you can create a free account or sign in, then your browser sends you back.'],
   ['Open your project', 'Add your terminals and agents. The Store keeps OUTARCH up to date.'],
 ];
 
 const FAQ = [
   ['What is OUTARCH?', 'A command center for your development work on Windows. It runs your terminals, dev servers, tests and AI coding agents in one window, watches them, and tells you when one needs a decision.'],
-  ['Is it only for AI agents?', 'No. Anything that runs in a terminal can be a worker: dev servers, test watchers, databases, plain shells. AI agents get extra help, such as permission alerts.'],
+  ['Is it for vibe coding with AI agents?', 'Yes. Run Claude Code, Codex, Gemini CLI or any CLI agent, several at once, and OUTARCH tells you when one needs an answer. It runs everything else that lives in a terminal too: dev servers, test watchers, databases and plain shells.'],
   ['What platforms does it support?', 'Windows 11. The first run needs Node.js 22 (22.12 or newer) to install what OUTARCH uses. macOS and Linux are not supported yet.'],
   ['Does my code leave my computer?', 'Not unless you use Mission AI. Your terminals, files and the engine run on your computer. When you ask Mission AI something, the context it needs, including any project files it reads to answer you, goes to the AI model you chose. It skips files that hold secrets, and terminal output is included only if you allow it.'],
   ['Which agents work with it?', 'Any agent with a command line runs in an OUTARCH terminal. Permission alerts recognize Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, OpenCode, Goose and Aider. Claude Code, Codex, Gemini CLI and OpenCode also have one-click setup.'],
@@ -143,9 +135,9 @@ const FAQ = [
   ['What happens when a worker crashes?', 'It is marked as failed, you get a notice, and it appears in Needs You with what it printed last. Restart it from there, or ask Mission AI what went wrong.'],
   ['What is Mission AI?', 'An assistant built into OUTARCH. It answers from your live workers, errors and history, and it asks for your approval before it runs a command or changes anything. Free includes 3 messages a day.'],
   ['What is project memory?', 'An arch_memory.md that OUTARCH keeps in your project, once you agree to it: what the project is for, how it runs, and every change, error and fix with who made it and why. AI agents such as Claude Code and Codex read it before they work and add a short entry when they finish. When you close OUTARCH after working by hand, Mission AI records what changed. Entries are only ever added, and secrets are removed.'],
-  ['What is the mobile companion?', 'A phone app that pairs with OUTARCH over your own network. Use it to see what is running, start or restart terminals and run recipes while you are away from your desk. It comes with Pro and Ultimate.'],
-  ['Do I need an account?', 'Yes. Your plan is tied to your account, so the app asks you to sign in once through your browser. After that it keeps working offline for up to 72 hours on the last plan it confirmed.'],
-  ['How does pricing work?', 'Plans are prepaid for a month or a year and paid on this website through Cashfree, with UPI, cards or netbanking. The app picks up a new plan within five minutes, and nothing renews automatically. When a plan ends, your account returns to Free and your projects and settings stay as they are.'],
+  ['What is the mobile companion?', 'A web app for your phone that pairs with OUTARCH over your own network. Use it to see what is running, start or restart terminals and run recipes while you are away from your desk. It installs from the phone\'s browser, with no app store step, and comes with Pro and Ultimate.'],
+  ['Do I need an account?', 'Not to download. The first time OUTARCH opens, it sends you to this website to create a free account or sign in, then brings you back. Your plan is tied to that account, and the app keeps working offline for up to 72 hours on the last plan it confirmed.'],
+  ['How does pricing work?', 'Plans are prepaid for a month or a year and paid on this website through Dodo Payments, with UPI, cards, netbanking or digital wallets. The app picks up a new plan within five minutes, and nothing renews automatically. When a plan ends, your account returns to Free and your projects and settings stay as they are.'],
   ['Can I move from Pro to Ultimate?', 'Yes. Buy Ultimate and the Pro time you have left carries over, converted at the two monthly prices, so you never pay twice for the same days.'],
   ['Can I get a refund?', 'The refund and cancellation policy explains when you can and how to ask.'],
 ];

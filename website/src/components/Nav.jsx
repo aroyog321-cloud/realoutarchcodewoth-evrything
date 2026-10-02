@@ -39,7 +39,7 @@ export default function Nav() {
 
       <div className="flex items-center gap-2">
         {session
-          ? <Link to="/account" className="hidden items-center gap-2 rounded-full px-3 py-2 text-[14px] text-fg-soft transition-colors hover:bg-white/[0.06] hover:text-fg sm:inline-flex"><UserCircle size={18}/>Account</Link>
+          ? <Link to="/account" className="hidden items-center gap-2 rounded-full px-3 py-2 text-[14px] text-fg-soft transition-colors hover:bg-white/[0.06] hover:text-fg sm:inline-flex"><UserCircle size={18}/>Dashboard</Link>
           : <Link to="/auth" className="hidden rounded-full px-3.5 py-2 text-[14px] text-fg-soft transition-colors hover:bg-white/[0.06] hover:text-fg sm:inline-flex">Sign in</Link>}
         <Button to="/#download" size="sm" className="hidden sm:inline-flex"><DownloadSimple size={16} weight="bold"/>Download</Button>
         <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-fg hover:bg-white/[0.08] lg:hidden" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={() => setOpen(value => !value)}>
@@ -58,7 +58,7 @@ export default function Nav() {
       >
         <nav className="flex flex-col" aria-label="Main">
           {LINKS.map(([label, to]) => <Link key={to} to={to} className="rounded-field px-4 py-3.5 text-[16px] text-fg-soft hover:bg-white/[0.06]">{label}</Link>)}
-          <Link to={session ? '/account' : '/auth'} className="rounded-field px-4 py-3.5 text-[16px] text-fg-soft hover:bg-white/[0.06]">{session ? 'Your account' : 'Sign in'}</Link>
+          <Link to={session ? '/account' : '/auth'} className="rounded-field px-4 py-3.5 text-[16px] text-fg-soft hover:bg-white/[0.06]">{session ? 'Dashboard' : 'Sign in'}</Link>
         </nav>
         <div className="mt-2 border-t border-line pt-3">
           <Button to="/#download" className="w-full" magnetic={false}><DownloadSimple size={17} weight="bold"/>Download for Windows</Button>

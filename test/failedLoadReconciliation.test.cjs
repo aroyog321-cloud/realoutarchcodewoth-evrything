@@ -13,7 +13,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 
 test("Automation distinguishes a failed automation.list from an empty list", () => {
   const src = read("src/groundstation/renderer/AutomationWorkflows.jsx");

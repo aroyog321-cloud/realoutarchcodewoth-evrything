@@ -21,7 +21,7 @@ const {
 } = require("../scripts/msix/manifest.cjs");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 const storeConfig = JSON.parse(read("packaging/msix/store.config.json"));
 const reserved = { ...storeConfig, identityName: "12345OUTARCH.OUTARCH", publisher: "CN=1A2B3C4D-0000-4000-8000-123456789ABC" };
 
@@ -99,16 +99,16 @@ test("MSIX versions are the package version plus a zero revision", () => {
 });
 
 test("a Store build refuses the placeholder and test identities; a test build accepts them", () => {
-  assert.equal(storeConfig.identityName, PLACEHOLDER_IDENTITY_NAME, "the repository ships the placeholder until Partner Center reserves the name");
-  const strict = validateStoreConfig(storeConfig, { strict: true });
+  const placeholderConfig = { ...storeConfig, identityName: PLACEHOLDER_IDENTITY_NAME, publisher: PLACEHOLDER_PUBLISHER };
+  const strict = validateStoreConfig(placeholderConfig, { strict: true });
   assert.ok(strict.some(problem => /identityName is still the placeholder/.test(problem)));
   assert.ok(strict.some(problem => /publisher is still the placeholder/.test(problem)));
-  assert.deepEqual(validateStoreConfig({ ...storeConfig, publisher: TEST_PUBLISHER }, { strict: false }), []);
+  assert.deepEqual(validateStoreConfig({ ...placeholderConfig, publisher: TEST_PUBLISHER }, { strict: false }), []);
   assert.ok(validateStoreConfig({ ...reserved, publisher: TEST_PUBLISHER }, { strict: true }).some(problem => /local test publisher/.test(problem)));
   assert.deepEqual(validateStoreConfig(reserved, { strict: true }), []);
+  assert.deepEqual(validateStoreConfig(storeConfig, { strict: true }), []);
   assert.ok(validateStoreConfig({ ...reserved, publisher: "O=Someone" }).some(problem => /CN=/.test(problem)));
   assert.ok(validateStoreConfig({ ...reserved, identityName: "has space" }).some(problem => /identityName/.test(problem)));
-  assert.equal(PLACEHOLDER_PUBLISHER, storeConfig.publisher);
 });
 
 test("the manifest declares a full-trust desktop app with its identity, logos, link and unvirtualized writes", () => {

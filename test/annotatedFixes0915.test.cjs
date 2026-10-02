@@ -14,7 +14,7 @@ const vm = require("node:vm");
 const { test } = require("node:test");
 
 const renderer = path.resolve(__dirname, "../src/groundstation/renderer");
-const read = file => fs.readFileSync(path.join(renderer, file), "utf8");
+const read = file => fs.readFileSync(path.join(renderer, file), "utf8").replace(/\r\n/g, "\n");
 
 function loadLaunchLabel() {
   const source = read("launchLabel.js");

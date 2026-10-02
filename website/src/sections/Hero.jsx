@@ -71,7 +71,7 @@ export function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.9, delay: 0.08, ease: EASE }}
       >
-        Your dev stack, <span className="ghost-ink whitespace-nowrap">supervised.</span>
+        Vibe code with AI agents, <span className="ghost-ink whitespace-nowrap">supervised.</span>
       </motion.h1>
       <motion.p
         className="lede mt-6 text-[clamp(1.05rem,1.6vw,1.25rem)]"
@@ -79,7 +79,7 @@ export function Hero() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.9, delay: 0.18, ease: EASE }}
       >
-        Run your dev servers, tests and AI coding agents side by side in one window. OUTARCH watches them all and tells you the moment one needs you.
+        Run Claude Code, Codex, Gemini CLI or any CLI agent side by side with your dev servers and tests, in one window. OUTARCH watches every terminal and tells you the moment one needs you.
       </motion.p>
       <motion.div
         className="mt-9 flex flex-wrap items-center gap-3"
@@ -119,5 +119,6 @@ export function DemoStage() {
         <DemoApp/>
       </motion.div>
     </div>
+    <p className="mt-4 text-center text-[12.5px] text-fg-dim">The live demo is a simulation. The app you download may differ from it in places.</p>
   </section>;
 }

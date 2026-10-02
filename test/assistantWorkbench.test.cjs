@@ -419,7 +419,7 @@ test("with no project open, the assistant says so instead of reading the app's o
 // ------------------------------------------------------------------ surfaces
 
 test("the chat shows a command's output under its step, and the app ends commands as it closes", () => {
-  const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+  const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
   const chat = read("src/groundstation/renderer/AssistantChat.jsx");
   assert.match(chat, /function CommandOutput\(\{ item \}\)/);
   assert.match(chat, /\{item\.command && \["running", "done", "failed"\]\.includes\(item\.state\) && <CommandOutput item=\{item\}\/>\}/);

@@ -11,7 +11,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const renderer = path.resolve(__dirname, "../src/groundstation/renderer");
-const read = rel => fs.readFileSync(path.join(renderer, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(renderer, rel), "utf8").replace(/\r\n/g, "\n");
 
 test("the project avatar is one letter and the switch affordance is an icon", () => {
   const app = read("App.jsx");
@@ -68,7 +68,7 @@ test("the Focus button's light runs only while focus mode is off and never under
 test("the off-canvas roster and the folder rail scroll without a scrollbar", () => {
   const app = read("App.jsx");
   assert.match(app, /<EdgeScroll className="workspace-background__roster"><ul data-edge-scroller>/);
-  assert.match(app, /<\/ul><\/EdgeScroll>\n      <\/section>\}/);
+  assert.match(app, /<\/ul><\/EdgeScroll>\s*<\/section>\}/);
   assert.match(app, /<EdgeScroll className="worker-folders__rail"><div className="worker-folder-list" data-edge-scroller>/);
 
   const edge = read("EdgeScroll.jsx");

@@ -85,6 +85,34 @@ export const SCRIPTS = {
     L('● Edits so far are unstaged; nothing was installed.', 'ai'),
     { done: true, keepRunning: true },
   ],
+  // What the demo's Claude Code answers when a visitor types into it.
+  claudeTests: [
+    L('● Bash(npm test -- auth)', 'ai'),
+    L('  ⎿  1 failed, 13 passed', 'warn'),
+    L('● Read(src/auth/session.ts)', 'ai'),
+    L('  ⎿  Read 84 lines', 'dim'),
+    L('● The failing test expects 401 for an expired token. verifyToken() checks the signature first and throws a 500. Checking expiry first fixes it.', 'ai'),
+    { done: true, keepRunning: true },
+  ],
+  claudeExplain: [
+    L('● Search(pattern: "zod", path: "src/auth")', 'ai'),
+    L('  ⎿  Found 3 files', 'dim'),
+    L('● The auth module now validates every request body with a zod schema (src/auth/schema.ts). Bad input returns 400 before it reaches a handler.', 'ai'),
+    { done: true, keepRunning: true },
+  ],
+  claudeCommit: [
+    L('● Bash(git add src/auth && git commit -m "auth: validate with zod")', 'ai'),
+    L('  ⎿  [feature/auth-zod 4c1e2a9] auth: validate with zod', 'dim'),
+    L('     3 files changed, 30 insertions(+), 13 deletions(-)', 'dim'),
+    L('● Committed on feature/auth-zod.', 'ok'),
+    { done: true, keepRunning: true },
+  ],
+  claudeGeneric: [
+    L('● Read(package.json)', 'ai'),
+    L('  ⎿  Read 46 lines', 'dim'),
+    L('● On it. In OUTARCH this is the real Claude Code CLI, running in its own terminal. When it needs permission, OUTARCH rings and adds it to Needs You.', 'ai'),
+    { done: true, keepRunning: true },
+  ],
   web: [
     L('  VITE v6.1.0  ready in 412 ms', 'ok'),
     L(''),
@@ -248,6 +276,18 @@ export const NEED_COLUMNS = {
     recovery: 'Stop any of them from its terminal or from Groundstation.',
   },
 };
+
+// Which reply the demo's Claude Code plays for what a visitor typed.
+export function claudeScriptFor(input) {
+  const lower = input.trim().toLowerCase();
+  if (/test|fail|bug|fix|error/.test(lower)) return 'claudeTests';
+  if (/commit|git|push/.test(lower)) return 'claudeCommit';
+  if (/explain|what|how|why|zod|auth/.test(lower)) return 'claudeExplain';
+  return 'claudeGeneric';
+}
+
+// What Claude Code's spinner says while each script is working.
+export const CLAUDE_VERBS = { claude: 'Refactoring', claudeDenied: 'Stopping', claudeTests: 'Investigating', claudeExplain: 'Reading', claudeCommit: 'Committing', claudeGeneric: 'Thinking' };
 
 // The small set of commands the demo PowerShell answers.
 export function shellReply(input) {

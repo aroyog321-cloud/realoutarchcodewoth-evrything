@@ -17,7 +17,7 @@ const { test } = require("node:test");
 const zlib = require("node:zlib");
 
 const root = path.join(__dirname, "..");
-const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
+const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8").replace(/\r\n/g, "\n");
 const POLICY_FILE = path.join(root, "src", "groundstation", "renderer", "legal", "outarchPolicies.js");
 const loadPolicies = () => import(pathToFileURL(POLICY_FILE).href);
 

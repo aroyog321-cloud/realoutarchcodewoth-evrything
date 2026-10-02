@@ -206,7 +206,7 @@ test("Electron window and auxiliary IPC retain the production trust boundary", (
   assert.match(main, /function assertTrustedMainFrame\(event\)/);
   assert.match(main, /event\?\.sender !== mainWindow\.webContents/);
   assert.match(main, /event\.senderFrame !== event\.sender\.mainFrame/);
-  assert.match(main, /const allowed = new Set\(\["https:\/\/github\.com\/radix-ui\/primitives", "https:\/\/github\.com\/pacocoursey\/cmdk"\]\)/);
+  assert.match(main, /Only http, https, and mailto URLs are allowed/);
 });
 
 // T107 / T151 — one accessible tab implementation, and no surface that claims

@@ -322,7 +322,7 @@ export function MobileSection() {
         <Reveal delay={0.3} className="mt-9 flex flex-wrap items-center gap-x-4 gap-y-3">
           {androidApkUrl
             ? <Button href={androidApkUrl} variant="mint" cursor="Get it" download><AndroidLogo size={18} weight="fill"/>Download for Android</Button>
-            : <Button to="/#mobile-app" variant="mint" cursor="Get it"><DeviceMobile size={18} weight="bold"/>Get the mobile app</Button>}
+            : <Button to="/mobile" variant="mint" cursor="Get it"><DeviceMobile size={18} weight="bold"/>Get the mobile app</Button>}
           <p className="text-[13.5px] text-fg-dim">Included with Pro and Ultimate. Opens in your phone's browser. Try the phone on the right.</p>
         </Reveal>
       </div>

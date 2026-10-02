@@ -13,7 +13,7 @@ const { pathToFileURL } = require("node:url");
 const { test } = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 const renderer = rel => read(path.join("src/groundstation/renderer", rel));
 
 async function loadClipboard(globals) {

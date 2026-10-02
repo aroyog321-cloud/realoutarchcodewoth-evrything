@@ -3,8 +3,8 @@ import {
   ArrowSquareOut, ArrowsIn, ArrowsOutSimple, CaretDown, CornersOut, DotsSixVertical, DotsThree, Globe, MagnifyingGlass,
   Play, Plus, Power, Sparkle, SquaresFour, Stop, TerminalWindow,
 } from '@phosphor-icons/react';
-import { FOLDERS, LAYOUTS, PROJECT } from '../demoData.js';
-import { runtime, useDemo } from '../useDemo.js';
+import { CLAUDE_VERBS, FOLDERS, LAYOUTS, PROJECT } from '../demoData.js';
+import { claudeIdle, runtime, useDemo } from '../useDemo.js';
 import { Dot } from './Groundstation.jsx';
 
 const BADGE_CLASS = { agent: 'ws-badge--agent', test: 'ws-badge--test' };
@@ -27,6 +27,52 @@ function ClaudePrompt({ worker }) {
   </div>;
 }
 
+// Claude Code as it looks in a terminal: its header stays at the top, the
+// transcript scrolls, and the input sits at the bottom. A permission question
+// takes the input's place, the way the CLI draws it.
+function ClaudeTerminal({ worker }) {
+  const { state, dispatch } = useDemo();
+  const box = useRef(null);
+  const stick = useRef(true);
+  const [draft, setDraft] = useState('');
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (element && stick.current) element.scrollTop = element.scrollHeight;
+  }, [worker.lines.length, worker.prompt]);
+  const running = worker.status === 'running' || worker.status === 'waiting';
+  const idle = claudeIdle(worker);
+  const working = worker.status === 'running' && !idle;
+  const seconds = Math.max(1, Math.round(((state.tick % 60) * 450) / 1000));
+  const transcript = worker.lines.filter(item => item.tone !== 'claude');
+  const send = event => {
+    event.preventDefault();
+    if (!draft.trim() || !idle) return;
+    dispatch({ type: 'CLAUDE', text: draft });
+    setDraft('');
+    stick.current = true;
+  };
+  return <div className="cc-term">
+    <div className="cc-head" aria-label="Claude Code">
+      <span className="cc-head__logo" aria-hidden="true">✻</span>
+      <span className="cc-head__text"><b>Claude Code</b> v2.1 · Sonnet 4.5 · <span>{PROJECT.path}</span></span>
+      <span className="cc-head__tag">AI agent in OUTARCH</span>
+    </div>
+    <div ref={box} className="rx-term cc-log" data-lenis-prevent="" onScroll={event => { const element = event.currentTarget; stick.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24; }}>
+      {transcript.map((item, index) => <div key={index} className={`rx-term__line ${item.tone ? `t-${item.tone}` : ''}`}>{item.text || ' '}</div>)}
+    </div>
+    <div className="cc-dock">
+      {worker.prompt ? <ClaudePrompt worker={worker}/> : running ? <>
+        {working ? <div className="cc-spin"><span aria-hidden="true">✻</span>{CLAUDE_VERBS[worker.script] || 'Thinking'}… <small>({seconds}s · esc to interrupt)</small></div> : null}
+        <form className="cc-input" onSubmit={send}>
+          <span aria-hidden="true">&gt;</span>
+          <input value={draft} onChange={event => setDraft(event.target.value)} disabled={!idle} aria-label="Type to Claude Code" placeholder={idle ? 'Try "why are the auth tests failing?"' : 'Claude is working…'} spellCheck={false} autoComplete="off" maxLength={200}/>
+        </form>
+        <div className="cc-foot">⏵⏵ accept edits off · ? for shortcuts</div>
+      </> : null}
+    </div>
+  </div>;
+}
+
 function Terminal({ worker }) {
   const { dispatch } = useDemo();
   const box = useRef(null);
@@ -45,10 +91,6 @@ function Terminal({ worker }) {
       <span>PS {PROJECT.path}&gt;</span>
       <input value={draft} onChange={event => setDraft(event.target.value)} aria-label={`Type into ${worker.name}`} placeholder="try: git status" spellCheck={false} autoComplete="off"/>
     </form> : null}
-    {claude && !worker.prompt && worker.status === 'running' ? <>
-      <div className="cc-input">&gt; Try "how do I log an error?"</div>
-      <div className="cc-foot">⏸ manual mode on · ? for shortcuts</div>
-    </> : null}
     {!shell && !claude && worker.status === 'running' ? <span className="rx-caret" aria-hidden="true"/> : null}
   </div>;
 }
@@ -99,7 +141,7 @@ function Pane({ worker, index, focused }) {
       </div>
     </header>
     <Banner worker={worker}/>
-    {showIdle ? <IdleCard worker={worker}/> : <Terminal worker={worker}/>}
+    {showIdle ? <IdleCard worker={worker}/> : worker.id === 'claude' ? <ClaudeTerminal worker={worker}/> : <Terminal worker={worker}/>}
   </section>;
 }
 

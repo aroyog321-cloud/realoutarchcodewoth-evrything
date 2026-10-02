@@ -4,8 +4,8 @@ import { Lockup } from './Brand.jsx';
 
 const COLUMNS = [
   ['Product', [['Live demo', '/#demo'], ['Features', '/#features'], ['How it works', '/#how'], ['Mobile companion', '/#mobile'], ['Download', '/#download']]],
-  ['Plans', [['Pricing', '/pricing'], ['Compare plans', '/pricing#compare'], ['Your account', '/account'], ['Sign in', '/auth'], ['Create account', '/auth?mode=signup']]],
-  ['Legal & privacy', [['All policies', '/legal'], ['Terms of service', '/terms'], ['Privacy policy', '/privacy'], ['AI & developer data', '/ai-data'], ['Cookie policy', '/cookies'], ['Security', '/security'], ['Refunds and cancellation', '/refunds'], ['Delivery', '/delivery'], ['Contact', '/contact']]],
+  ['Plans', [['Pricing', '/pricing'], ['Compare plans', '/pricing#compare'], ['Upgrade policy', '/upgrades'], ['Your account', '/account'], ['Sign in', '/auth'], ['Create account', '/auth?mode=signup']]],
+  ['Legal & privacy', [['All policies', '/legal'], ['Terms of service', '/terms'], ['End user licence', '/eula'], ['Privacy policy', '/privacy'], ['AI & developer data', '/ai-data'], ['Cookie policy', '/cookies'], ['Security', '/security'], ['Refunds and cancellation', '/refunds'], ['Delivery', '/delivery'], ['Contact', '/contact']]],
 ];
 
 export default function Footer() {

@@ -21,24 +21,32 @@ export const billing = {
   config: () => call({ action: 'config' }),
   create: input => call({ action: 'create', ...input }),
   verify: orderId => call({ action: 'verify', orderId }),
+  // Test payments only: settles a test order as success, failed or cancelled.
+  simulate: (orderId, result, method) => call({ action: 'simulate', orderId, result, method }),
 };
-
-let sdk = null;
-export async function loadCashfree(mode) {
-  if (!sdk) sdk = import('@cashfreepayments/cashfree-js').then(module => module.load);
-  const load = await sdk;
-  return load({ mode: mode === 'production' ? 'production' : 'sandbox' });
-}
 
 // Ask until the order is settled, or give up after a while and let the page
 // say so. The webhook applies the payment even if nobody is watching.
-export async function waitForPayment(orderId, { tries = 12, gap = 2500, onTick } = {}) {
+//
+// Strategy: poll 15 times with 2 s gaps (= 30 s total). The first few polls
+// happen quickly so the happy path (webhook already fired) resolves fast;
+// subsequent polls give the webhook time to land.
+export async function waitForPayment(orderId, { tries = 15, gap = 2000, onTick } = {}) {
   let last = null;
   for (let attempt = 0; attempt < tries; attempt += 1) {
-    last = await billing.verify(orderId);
-    onTick?.(last, attempt);
-    if (last?.status === 'paid' || last?.status === 'expired') return last;
-    if (last?.lastAttempt === 'FAILED' || last?.lastAttempt === 'USER_DROPPED') return last;
+    try {
+      last = await billing.verify(orderId);
+      onTick?.(last, attempt);
+      if (
+        last?.status === 'paid' ||
+        last?.status === 'expired' ||
+        last?.status === 'failed' ||
+        last?.status === 'cancelled'
+      ) return last;
+      if (last?.lastAttempt === 'FAILED' || last?.lastAttempt === 'USER_DROPPED') return last;
+    } catch {
+      // ignore transient network or edge function errors while polling
+    }
     await new Promise(resolve => setTimeout(resolve, gap));
   }
   return last;

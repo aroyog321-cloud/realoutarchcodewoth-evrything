@@ -85,6 +85,7 @@ export default function AuthPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [agreePolicy, setAgreePolicy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(desktopFlow && !state ? 'This sign-in page was opened without its link to the OUTARCH app. Start signing in from OUTARCH again.' : '');
@@ -105,6 +106,25 @@ export default function AuthPage() {
     // A session is handed on once, however many times this is reached.
     if (finished.current) return;
     finished.current = true;
+
+    // Ensure policy acceptance timestamp is recorded in Supabase user metadata
+    if (session?.user) {
+      try {
+        const meta = session.user.user_metadata || {};
+        if (!meta.terms_accepted) {
+          await client.auth.updateUser({
+            data: {
+              terms_accepted: true,
+              terms_accepted_at: new Date().toISOString(),
+              terms_version: '2026-10-01',
+            },
+          });
+        }
+      } catch (metaErr) {
+        console.warn('Metadata recording notice:', metaErr);
+      }
+    }
+
     if (desktopFlow) {
       const link = desktopCallback(session, state);
       if (!link) {
@@ -174,11 +194,21 @@ export default function AuthPage() {
     }
     if (mode === 'signup') {
       return run(async () => {
+        if (!agreePolicy) throw new Error('Please accept the required terms and policies to create an account.');
         if (password.length < 8) throw new Error('Use a password of at least 8 characters.');
+        const acceptedAt = new Date().toISOString();
         const { data, error: signUpError } = await client.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { full_name: name.trim() || undefined }, emailRedirectTo: returnUrl() },
+          options: {
+            data: {
+              full_name: name.trim() || undefined,
+              terms_accepted: true,
+              terms_accepted_at: acceptedAt,
+              terms_version: '2026-10-01',
+            },
+            emailRedirectTo: returnUrl(),
+          },
         });
         if (signUpError) throw signUpError;
         if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) throw new Error('User already registered');
@@ -263,9 +293,28 @@ export default function AuthPage() {
             <button type="button" className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full text-fg-muted hover:bg-white/[0.07] hover:text-fg" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeSlash size={18}/> : <Eye size={18}/>}</button>
           </span>
         </Field> : null}
+
+        {mode === 'signup' ? (
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-field border border-white/10 bg-white/[0.02] p-3 text-[13px] leading-snug text-fg-soft shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] select-none">
+            <input
+              id="auth-policy-agree"
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-black/40 text-brand-sky accent-brand-sky focus:ring-brand-sky cursor-pointer"
+              checked={agreePolicy}
+              onChange={e => {
+                setAgreePolicy(e.target.checked);
+                if (error && /terms|policy|policies/i.test(error)) setError('');
+              }}
+            />
+            <span>
+              I agree to the <a className="text-brand-sky underline hover:text-white" href="/terms" target="_blank" rel="noopener">Terms of service</a>, <a className="text-brand-sky underline hover:text-white" href="/eula" target="_blank" rel="noopener">EULA</a>, <a className="text-brand-sky underline hover:text-white" href="/privacy" target="_blank" rel="noopener">Privacy policy</a>, <a className="text-brand-sky underline hover:text-white" href="/acceptable-use" target="_blank" rel="noopener">Acceptable use</a>, and <a className="text-brand-sky underline hover:text-white" href="/refunds" target="_blank" rel="noopener">Refund policy</a>, and confirm I am 18 or older.
+            </span>
+          </label>
+        ) : null}
+
         <AnimatePresence>{notice ? <Message tone="notice">{notice}</Message> : null}</AnimatePresence>
         <AnimatePresence>{error ? <Message tone="error">{error}</Message> : null}</AnimatePresence>
-        <button type="submit" className="btn btn--primary btn--lg w-full" disabled={busy || blocked || !(emailMode ? email.trim() : true) || (passwordMode && !password)}>
+        <button type="submit" className="btn btn--primary btn--lg w-full" disabled={busy || blocked || !(emailMode ? email.trim() : true) || (passwordMode && !password) || (mode === 'signup' && !agreePolicy)}>
           {busy ? <CircleNotch size={18} className="animate-spin"/> : null}
           {{ signin: 'Sign in', signup: 'Create account', 'reset-request': 'Send reset link', 'reset-set': 'Save password' }[mode]}
         </button>

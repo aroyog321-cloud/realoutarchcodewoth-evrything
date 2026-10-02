@@ -55,7 +55,7 @@ test("long input is split under the protocol limit, in order, never inside a cha
 });
 
 test("the terminal pane lets paste through and sends input in pieces", () => {
-  const pane = fs.readFileSync(path.join(root, "src/groundstation/renderer/TerminalPane.jsx"), "utf8");
+  const pane = fs.readFileSync(path.join(root, "src/groundstation/renderer/TerminalPane.jsx"), "utf8").replace(/\r\n/g, "\n");
   assert.match(pane, /import \{ chunkTerminalInput, isPasteChord, isShellAltChord \} from "\.\/terminalInput\.js";/);
   const paste = pane.indexOf("if (isPasteChord(event)) return false;");
   const altV = pane.indexOf("if (isShellAltChord(event)) return true;");

@@ -39,6 +39,7 @@ function PlanCard({ plan, period, currency, current }) {
   const monthly = priceOf(plan.prices, plan.id, 'month', currency);
   const copy = COPY[plan.id] || { cta: `Get ${plan.name}`, points: [] };
   const isCurrent = current === plan.id;
+  const isIncludedInHigher = current === 'ultimate' && plan.id === 'pro';
   const href = plan.id === 'free' ? '/#download' : `/checkout?plan=${plan.id}&period=${period}&currency=${currency}`;
   return <motion.article
     ref={card}
@@ -50,7 +51,7 @@ function PlanCard({ plan, period, currency, current }) {
     {featured ? <span className="ring-border" style={{ animationPlayState: inView ? 'running' : 'paused' }} aria-hidden="true"/> : null}
     <div className="flex items-center justify-between">
       <h3 className="flex items-center gap-2 text-[20px] font-semibold">{plan.id !== 'free' ? <Crown size={18} weight="fill" className={featured ? 'text-brand-violet' : 'text-brand-sky'}/> : null}{plan.name}</h3>
-      {isCurrent ? <span className="chip">Your plan</span> : featured ? <span className="rounded-full bg-brand-violet/15 px-3 py-1 text-[12px] font-semibold text-[#d6ccff] shadow-[inset_0_0_0_1px_rgba(155,123,255,0.4)]">Everything</span> : null}
+      {isCurrent ? <span className="chip">Your plan</span> : isIncludedInHigher ? <span className="chip opacity-80">Included</span> : featured ? <span className="rounded-full bg-brand-violet/15 px-3 py-1 text-[12px] font-semibold text-[#d6ccff] shadow-[inset_0_0_0_1px_rgba(155,123,255,0.4)]">Everything</span> : null}
     </div>
     <p className="mt-2 min-h-[44px] text-[14.5px] text-fg-muted">{plan.tagline}</p>
     <div className="mt-6 flex items-baseline gap-2">
@@ -59,15 +60,18 @@ function PlanCard({ plan, period, currency, current }) {
         : price ? <>
           <motion.span key={`${price.amount}${currency}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-[44px] font-semibold tracking-[-0.03em]">{formatMoney(price.amount, currency)}</motion.span>
           <span className="text-[14px] text-fg-muted">/ {period === 'year' ? 'year' : 'month'}</span>
+          <span className="text-[12px] font-medium text-fg-dim">+ taxes</span>
         </> : <span className="text-[20px] text-fg-muted">Not for sale</span>}
     </div>
-    <p className="mt-1 h-5 text-[13px] text-fg-dim">{plan.id !== 'free' && period === 'year' && monthly ? `${formatMoney(monthly.amount * 12, currency)} if paid monthly` : plan.id !== 'free' ? 'Prepaid, no auto-renewal' : 'No card needed'}</p>
+    <p className="mt-1 h-5 text-[13px] text-fg-dim">{plan.id !== 'free' && period === 'year' && monthly ? `${formatMoney(monthly.amount * 12, currency)} + taxes if paid monthly` : plan.id !== 'free' ? 'Prepaid + applicable taxes, no auto-renewal' : 'No card needed'}</p>
     <ul className="mt-6 flex flex-1 flex-col gap-3">
       {copy.points.map(point => <li key={point} className="flex gap-2.5 text-[14.5px] text-fg-soft"><Check size={17} weight="bold" className="mt-0.5 shrink-0 text-brand-mint"/>{point}</li>)}
     </ul>
     <div className="mt-8">
       {isCurrent
         ? <span className="btn btn--glass w-full cursor-default">Your current plan</span>
+        : isIncludedInHigher
+        ? <span className="btn btn--glass w-full cursor-default opacity-70">Included in Ultimate</span>
         : <Magnetic className="w-full"><Link to={href} className={`btn w-full ${featured ? 'btn--primary' : plan.id === 'pro' ? 'btn--mint' : 'btn--glass'}`} data-cursor-label={plan.id === 'free' ? 'Free' : 'Buy'}>{copy.cta}</Link></Magnetic>}
     </div>
   </motion.article>;

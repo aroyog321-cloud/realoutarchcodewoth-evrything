@@ -11,7 +11,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 const renderer = rel => read(path.join("src/groundstation/renderer", rel));
 
 test("History's run chapters read at the type floor and keep the whole name", () => {
@@ -113,7 +113,7 @@ test("the renderer is rebuilt only when its sources changed", t => {
 });
 
 test("the Windows launcher is OUTARCH's, keeps the old name working and stops reinstalling", () => {
-  const launcher = read("OPEN_OUTARCH_WINDOWS.cmd");
+  const launcher = fs.readFileSync(path.join(root, "OPEN_OUTARCH_WINDOWS.cmd"), "utf8");
   assert.equal((launcher.match(/(?<!\r)\n/g) || []).length, 0, "cmd.exe needs CRLF line endings");
   assert.match(launcher, /title OUTARCH\r\n/);
   assert.match(launcher, /node\.exe -e "require\('node-pty'\)" >nul 2>nul\r\nif errorlevel 1 goto install_dependencies/);

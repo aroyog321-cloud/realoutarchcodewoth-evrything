@@ -16,7 +16,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
+const read = rel => fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 
 /* ------------------------------------------------------------ 1. agents */
 

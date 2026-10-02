@@ -19,8 +19,8 @@
 // This file holds no JSX so the desktop renderer and the website can both
 // import it.
 
-export const LEGAL_VERSION = "2026-09-23";
-export const LEGAL_UPDATED = "23 September 2026";
+export const LEGAL_VERSION = "2026-10-01";
+export const LEGAL_UPDATED = "1 October 2026";
 
 // The documents a person agrees to before the desktop app starts. The privacy
 // policy is a notice, not something to agree to, so it is linked, not ticked.
@@ -54,8 +54,8 @@ const POLICY_LIST = [
       {
         heading: "Plans",
         blocks: [
-          "OUTARCH has a Free plan and paid plans (Pro and Ultimate). What each plan includes is shown on the pricing page and in the app. Paid plans are prepaid for a fixed period and do not renew automatically.",
-          "The terms for buying a paid plan online, including the payment provider and how payments are handled, are shown on the checkout page when online checkout is available. We may change plans and prices for future purchases; a period you have already paid for keeps the plan and price you bought."
+          "OUTARCH has a Free plan and paid plans (Pro and Ultimate). What each plan includes is shown on the pricing page and in the app. Paid plans are prepaid for fixed periods (currently 1 month or 12 months) and do not renew automatically. There is currently no automatic recurring subscription billing.",
+          "Payments for applicable website transactions are processed through Dodo Payments, which acts as OUTARCH's Merchant of Record and payment provider. Prices are displayed in INR or USD plus applicable statutory taxes (such as GST) according to checkout. Upgrading from an active Pro plan to Ultimate prorates your remaining Pro time and automatically converts it into Ultimate credit days upon your acceptance at checkout. We may change plans and prices for future purchases; a period you have already paid for keeps the plan and price you bought."
         ]
       },
       {
@@ -122,6 +122,7 @@ const POLICY_LIST = [
       {
         heading: "Changes to these terms",
         blocks: [
+          "These terms and policies are living documents and may be updated, expanded, or revised as OUTARCH's products, features, services, payment methods, integrations, legal requirements, and business practices evolve. The version applicable to a particular transaction, service, or activity will generally be the version in effect at the relevant time, subject to applicable law.",
           "If we change these terms we will update this page and the date above. If a change is significant, the desktop app asks you to agree again before you continue."
         ]
       },
@@ -217,13 +218,13 @@ const POLICY_LIST = [
         heading: "What we collect and keep",
         blocks: [
           [
-            "Account: your email address, and your name and profile picture if you sign in with Google and Google shares them.",
-            "Plan: which plan you have, when it started and ends, and how many built-in Mission AI messages you used today.",
+            "Account: your email address, your full name and profile picture (if you sign in with Google), and your contact mobile phone number (provided during checkout or on your account profile).",
+            "Plan: which plan you have, when it started and ends, your billing and order history references, and how many built-in Mission AI messages you used today.",
             "Mission AI usage records: for built-in models, a record of each message turn (the surface it came from, the number of model calls and the time). The content of your messages is not stored by us. These records are deleted after two days.",
-            "Plan requests: if you ask for a plan from the app or website, the plan and any message you write.",
+            "Plan requests and upgrade records: if you request a plan or accept a pro-rated plan upgrade conversion, the record of your consent and timestamp.",
             "Sign-in and security records kept by our authentication provider, such as sign-in times and the IP address and browser used."
           ],
-          "When online checkout is available, payment records (order reference, plan, amount, currency, status and payment method type) are kept as described on the checkout page. We do not receive card, UPI or bank account details."
+          "Payment processing and data separation: Dodo Payments acts as OUTARCH's Merchant of Record and payment provider for applicable website transactions. OUTARCH stores your account ID, email, name or profile details, plan tier, order reference ID, payment status, currency, amount paid, and contact mobile phone number (if provided). OUTARCH never receives, processes, or stores sensitive financial credentials such as credit or debit card numbers, CVVs, bank account credentials, or UPI PINs. Dodo Payments collects and securely processes these payment details, billing addresses, fraud and risk signals, and statutory tax compliance details independently under PCI-DSS Level 1 compliance, Merchant of Record obligations, and its own privacy policy. OUTARCH does not control Dodo Payments' independent processing."
         ]
       },
       {
@@ -714,12 +715,12 @@ const POLICY_LIST = [
         heading: "Services we use",
         blocks: [
           [
+            "Dodo Payments: acts as OUTARCH's Merchant of Record and payment provider for applicable website transactions. Handles secure checkout, payment processing, fraud and risk management, tax compliance (GST/VAT), invoicing, and Merchant of Record obligations. Receives customer name, email address, mobile phone number, billing country, and transaction amount. Card details and banking credentials are submitted directly to Dodo Payments and are never seen or stored by OUTARCH.",
             "Supabase: sign-in, account database, plan checks, release downloads and the AI proxy. Receives your account data and sign-in requests. Hosted in Mumbai, India.",
             "Google: Sign in with Google (if you choose it), and Gemini as a built-in Mission AI model. Receives your Google sign-in, and Mission AI requests sent to Gemini.",
             "NVIDIA: a built-in Mission AI model provider. Receives Mission AI requests sent to its models.",
             "Our website hosting provider: serves the website and, like any web host, sees the IP address and browser of each visit."
-          ],
-          "When online checkout becomes available, the payment provider will be listed here with what it receives."
+          ]
         ]
       },
       {
@@ -773,7 +774,6 @@ const POLICY_LIST = [
             "Lenis (MIT)",
             "Phosphor Icons (MIT) and Lucide (ISC)",
             "clsx and tailwind-merge (MIT)",
-            "Cashfree JS (MIT)",
             "Geist, Geist Mono, Inter and JetBrains Mono typefaces (SIL Open Font License 1.1)"
           ]
         ]

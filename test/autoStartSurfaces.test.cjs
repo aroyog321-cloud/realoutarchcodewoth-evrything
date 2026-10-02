@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const renderer = path.resolve(__dirname, "../src/groundstation/renderer");
-const read = file => fs.readFileSync(path.join(renderer, file), "utf8");
+const read = file => fs.readFileSync(path.join(renderer, file), "utf8").replace(/\r\n/g, "\n");
 
 function cssFiles() {
   return [

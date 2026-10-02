@@ -14,7 +14,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const renderer = path.resolve(__dirname, "../src/groundstation/renderer");
-const read = file => fs.readFileSync(path.join(renderer, file), "utf8");
+const read = file => fs.readFileSync(path.join(renderer, file), "utf8").replace(/\r\n/g, "\n");
 
 test("the pane header no longer carries the connection chip or the sparkline", () => {
   const pane = read("TerminalPane.jsx");

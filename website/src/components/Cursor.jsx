@@ -30,16 +30,22 @@ export default function Cursor() {
 
   useEffect(() => {
     if (!enabled) return undefined;
-    const onMove = event => {
-      x.set(event.clientX);
-      y.set(event.clientY);
-      const target = event.target instanceof Element ? event.target : null;
+    let rafId = 0;
+    let pendingEvent = null;
+
+    const flush = () => {
+      if (!pendingEvent) return;
+      const { clientX, clientY, target } = pendingEvent;
+      pendingEvent = null;
+      x.set(clientX);
+      y.set(clientY);
+      const el = target instanceof Element ? target : null;
       let state = '';
       let text = '';
-      if (target?.closest('input, textarea, select, [contenteditable="true"]')) state = 'text';
-      else if (target?.closest('.oa-demo')) state = 'demo';
+      if (el?.closest('input, textarea, select, [contenteditable="true"]')) state = 'text';
+      else if (el?.closest('.oa-demo')) state = 'demo';
       else {
-        const interactive = target?.closest('a, button, [role="button"], [data-cursor-label], summary, label');
+        const interactive = el?.closest('a, button, [role="button"], [data-cursor-label], summary, label');
         if (interactive) {
           state = 'link';
           text = interactive.getAttribute('data-cursor-label') || '';
@@ -48,14 +54,30 @@ export default function Cursor() {
       if (ring.current && ring.current.dataset.state !== state) ring.current.dataset.state = state;
       if (label.current && label.current.textContent !== text) label.current.textContent = text;
     };
+
+    const onMove = event => {
+      pendingEvent = event;
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          flush();
+        });
+      }
+    };
     const onDown = () => scale.set(0.82);
     const onUp = () => scale.set(1);
-    const onLeave = () => { x.set(-100); y.set(-100); };
+    const onLeave = () => {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+      pendingEvent = null;
+      x.set(-100);
+      y.set(-100);
+    };
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
     document.documentElement.addEventListener('pointerleave', onLeave);
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointerup', onUp);
