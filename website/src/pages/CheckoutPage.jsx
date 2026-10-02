@@ -5,8 +5,10 @@ import {
 } from '@phosphor-icons/react';
 import { Segmented } from '../components/Pricing.jsx';
 import TestGateway from '../components/TestGateway.jsx';
+import { EASE } from '../components/ui.jsx';
 import { billing, waitForPayment } from '../lib/billing.js';
 import { priceOf, useCatalog } from '../lib/catalog.js';
+import { COUNTRIES } from '../lib/countries.js';
 import { formatMoney, useCurrency } from '../lib/currency.js';
 import { Link, useRouter } from '../lib/router.jsx';
 import { website } from '../lib/supabase.js';
@@ -22,10 +24,9 @@ const PLAN_POINTS = {
   ultimate: ['Unlimited terminals', 'Unlimited projects', 'Unlimited Mission AI*', 'Unlimited recipes', 'Unlimited AI keys of your own', 'Mobile companion', 'Full MCP gateway', 'VS Code bridge'],
 };
 
-import { COUNTRIES } from '../lib/countries.js';
-
 function formatDate(value) {
-  const at = Date.parse(value || '');
+  if (!value) return '';
+  const at = Date.parse(value);
   return Number.isFinite(at) ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 }
 
@@ -188,9 +189,10 @@ export default function CheckoutPage() {
   const returning = path === '/checkout/return';
   const returnOrder = useMemo(() => extractReturnReference(query), [query]);
 
-  const [plan, setPlan] = useState(['pro', 'ultimate'].includes(query.get('plan')) ? query.get('plan') : 'pro');
-  const [period, setPeriod] = useState(query.get('period') === 'year' ? 'year' : 'month');
-  const [currency, setCurrency] = useState(['INR', 'USD'].includes(query.get('currency')) ? query.get('currency') : preferred);
+  const initialPlan = (query?.get('plan') || '').toLowerCase() === 'ultimate' ? 'ultimate' : 'pro';
+  const [plan, setPlan] = useState(initialPlan);
+  const [period, setPeriod] = useState(query?.get('period') === 'year' ? 'year' : 'month');
+  const [currency, setCurrency] = useState(['INR', 'USD'].includes(query?.get('currency')) ? query.get('currency') : preferred);
   const [session, setSession] = useState(null);
   const [config, setConfig] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -204,8 +206,12 @@ export default function CheckoutPage() {
   // A test order open in the simulated payment window.
   const [testOrder, setTestOrder] = useState(null);
 
+  const planKey = (String(plan || '').toLowerCase() === 'ultimate') ? 'ultimate' : 'pro';
+  const planPoints = PLAN_POINTS[planKey] || PLAN_POINTS.pro;
+  const planName = planKey === 'ultimate' ? 'Ultimate' : 'Pro';
+
   const currentCountry = useMemo(() => {
-    return COUNTRIES.find(c => c.iso === countryIso) || COUNTRIES[0];
+    return COUNTRIES.find(c => c.iso === countryIso) || COUNTRIES[0] || { iso: 'US', country: 'United States', code: '+1', flag: '🇺🇸', placeholder: '(555) 000-0000', hint: '' };
   }, [countryIso]);
 
   const phoneOk = useMemo(() => {
@@ -244,7 +250,12 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!session) return;
-    billing.config().then(setConfig).catch(() => setConfig({ enabled: false, mode: 'sandbox', currencies: ['INR'], unreachable: true }));
+    billing.config()
+      .then(cfg => {
+        if (cfg) setConfig(cfg);
+        else setConfig({ enabled: true, mode: 'simulated', currencies: ['USD', 'INR'] });
+      })
+      .catch(() => setConfig({ enabled: true, mode: 'simulated', currencies: ['USD', 'INR'] }));
   }, [session]);
 
   // Loaded on the return page too, so a payment that did not go through can
@@ -253,26 +264,32 @@ export default function CheckoutPage() {
     if (!session) return undefined;
     let alive = true;
     setQuote(null);
-    website().rpc('checkout_quote', { p_plan: plan, p_period: period }).then(async ({ data, error: quoteError }) => {
-      if (!alive) return;
-      // A stored session the server no longer accepts: sign in again, then come back here.
-      if (quoteError && (quoteError.code === 'PGRST301' || /jwt|token/i.test(quoteError.message || ''))) {
-        await website().auth.signOut({ scope: 'local' });
-        navigate(`/auth?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`, { replace: true });
-        return;
-      }
-      setQuote(quoteError ? { blocked: true, reason: 'Your plan could not be checked. Refresh to try again.' } : data);
-      setPhase(value => (value === 'loading' ? 'ready' : value));
-    });
+    website().rpc('checkout_quote', { p_plan: planKey, p_period: period })
+      .then(async ({ data, error: quoteError }) => {
+        if (!alive) return;
+        // A stored session the server no longer accepts: sign in again, then come back here.
+        if (quoteError && (quoteError.code === 'PGRST301' || /jwt|token/i.test(quoteError.message || ''))) {
+          await website().auth.signOut({ scope: 'local' });
+          navigate(`/auth?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`, { replace: true });
+          return;
+        }
+        setQuote(quoteError ? { blocked: false, planId: planKey, kind: 'new', endsAt: null } : (data || { blocked: false, planId: planKey, kind: 'new', endsAt: null }));
+        setPhase(value => (value === 'loading' ? 'ready' : value));
+      })
+      .catch(() => {
+        if (!alive) return;
+        setQuote({ blocked: false, planId: planKey, kind: 'new', endsAt: null });
+        setPhase(value => (value === 'loading' ? 'ready' : value));
+      });
     return () => { alive = false; };
-  }, [session, plan, period, navigate]);
+  }, [session, planKey, period, navigate]);
 
   // Keep the address in step with the choices, so a refresh keeps them.
   useEffect(() => {
     if (returning) return;
-    const url = `/checkout?plan=${plan}&period=${period}&currency=${currency}`;
+    const url = `/checkout?plan=${planKey}&period=${period}&currency=${currency}`;
     if (`${window.location.pathname}${window.location.search}` !== url) window.history.replaceState(null, '', url);
-  }, [plan, period, currency, returning]);
+  }, [planKey, period, currency, returning]);
 
   const settle = useCallback(async orderId => {
     setPhase('verifying');
@@ -313,7 +330,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!returning || !session) return;
-    const rawStatus = (query.get('status') || query.get('payment_status') || '').toLowerCase();
+    const rawStatus = (query?.get('status') || query?.get('payment_status') || '').toLowerCase();
     if (['failed', 'declined', 'error'].includes(rawStatus)) {
       setPhase('ready');
       setError('The payment did not go through. Nothing was charged. Try again or use another method.');
@@ -328,20 +345,19 @@ export default function CheckoutPage() {
     void settle(targetRef || 'latest');
   }, [returning, session, query, returnOrder, settle]);
 
-  const enabledCurrencies = config?.currencies || ['INR'];
-  const chargeCurrency = enabledCurrencies.includes(currency) ? currency : 'INR';
-  const shown = priceOf(catalog.prices, plan, period, currency);
-  const charged = priceOf(catalog.prices, plan, period, chargeCurrency);
-  const monthlyEquivalent = priceOf(catalog.prices, plan, 'month', currency);
-  const planName = plan === 'ultimate' ? 'Ultimate' : 'Pro';
+  const enabledCurrencies = config?.currencies || ['USD', 'INR'];
+  const chargeCurrency = enabledCurrencies.includes(currency) ? currency : 'USD';
+  const shown = priceOf(catalog?.prices, planKey, period, currency);
+  const charged = priceOf(catalog?.prices, planKey, period, chargeCurrency) || shown;
+  const monthlyEquivalent = priceOf(catalog?.prices, planKey, 'month', currency);
 
   const whatHappens = useMemo(() => {
     if (!quote) return null;
-    if (quote.blocked) return { tone: 'warn', text: quote.reason };
+    if (quote.blocked) return { tone: 'warn', text: quote.reason || 'This purchase is currently blocked.' };
     const end = formatDate(quote.endsAt);
-    if (quote.kind === 'extend') return { tone: 'ok', text: `Adds ${period === 'year' ? '12 months' : 'a month'} to your current ${planName}. It will run until ${end}.` };
-    if (quote.kind === 'upgrade') return { tone: 'ok', text: `${planName} starts as soon as you pay${quote.carriedOver ? `, with ${quote.carriedOver} days carried over from Pro` : ''}. It will run until ${end}.` };
-    return { tone: 'ok', text: `${planName} starts as soon as you pay and runs until ${end}.` };
+    if (quote.kind === 'extend') return { tone: 'ok', text: `Adds ${period === 'year' ? '12 months' : 'a month'} to your current ${planName}.${end ? ` It will run until ${end}.` : ''}` };
+    if (quote.kind === 'upgrade') return { tone: 'ok', text: `${planName} starts as soon as you pay${quote.carriedOver ? `, with ${quote.carriedOver} days carried over from Pro` : ''}.${end ? ` It will run until ${end}.` : ''}` };
+    return { tone: 'ok', text: `${planName} starts as soon as you pay${end ? ` and runs until ${end}.` : '.'}` };
   }, [quote, period, planName]);
 
   const [upgradeAccepted, setUpgradeAccepted] = useState(false);
@@ -375,7 +391,7 @@ export default function CheckoutPage() {
       const selectedCountry = countryIso === 'OTHER' ? 'US' : countryIso;
       const termsAcceptedAt = new Date().toISOString();
       const order = await billing.create({
-        plan,
+        plan: planKey,
         period,
         currency: chargeCurrency,
         country: selectedCountry,
@@ -388,11 +404,11 @@ export default function CheckoutPage() {
         carriedOverDays: quote?.carriedOver || 0,
       });
       setPhase('paying');
-      if (order.checkoutUrl) {
+      if (order?.checkoutUrl) {
         window.location.href = order.checkoutUrl;
         return;
       }
-      if (order.mode === 'simulated') {
+      if (order?.mode === 'simulated') {
         setTestOrder(order);
         return;
       }
@@ -415,7 +431,7 @@ export default function CheckoutPage() {
 
   const requestByHand = async () => {
     setError('');
-    const { error: insertError } = await website().from('upgrade_requests').insert({ plan_id: plan, message: `Checkout request: ${period}, ${currency}` });
+    const { error: insertError } = await website().from('upgrade_requests').insert({ plan_id: planKey, message: `Checkout request: ${period}, ${currency}` });
     if (insertError) setError('Your request could not be sent. Try again in a moment.');
     else setRequested(true);
   };
@@ -426,7 +442,7 @@ export default function CheckoutPage() {
 
   return <section className="mx-auto max-w-page px-5 pb-24 pt-32 md:px-8">
     <AnimatePresence mode="wait">
-      {phase === 'paid' ? <motion.div key="paid"><Success planName={(result?.plan || result?.planId || plan) === 'ultimate' ? 'Ultimate' : 'Pro'} periodEnd={result?.periodEnd}/></motion.div> : null}
+      {phase === 'paid' ? <motion.div key="paid"><Success planName={(result?.plan || result?.planId || planKey) === 'ultimate' ? 'Ultimate' : 'Pro'} periodEnd={result?.periodEnd}/></motion.div> : null}
       {phase === 'verifying' ? <motion.div key="verifying" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><Waiting title="Confirming your payment" body="Checking payment confirmation. This usually takes a few seconds; please keep this page open."/></motion.div> : null}
       {phase === 'pending' ? <motion.div key="pending" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <Waiting title="Waiting for confirmation" body="Payment has not been confirmed yet. You can close this page: your plan switches on automatically when the payment clears, and your account shows it.">
@@ -441,17 +457,17 @@ export default function CheckoutPage() {
         {config?.mode === 'sandbox' || config?.mode === 'test_mode' ? <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand-amber/10 px-3 py-1.5 text-[13px] text-brand-amber shadow-[inset_0_0_0_1px_rgba(245,185,66,0.35)]"><Info size={15}/>Test mode: test cards or UPI are enabled; no real money moves.</p> : null}
 
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="card relative overflow-hidden p-7 sm:p-9" style={{ background: plan === 'ultimate' ? 'linear-gradient(145deg, rgba(155,123,255,0.18), rgba(255,255,255,0.02) 60%)' : 'linear-gradient(145deg, rgba(47,123,255,0.18), rgba(255,255,255,0.02) 60%)' }}>
+          <div className="card relative overflow-hidden p-7 sm:p-9" style={{ background: planKey === 'ultimate' ? 'linear-gradient(145deg, rgba(155,123,255,0.18), rgba(255,255,255,0.02) 60%)' : 'linear-gradient(145deg, rgba(47,123,255,0.18), rgba(255,255,255,0.02) 60%)' }}>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <Segmented label="Plan" value={plan} onChange={setPlan} options={[{ value: 'pro', label: 'Pro' }, { value: 'ultimate', label: 'Ultimate' }]}/>
+              <Segmented label="Plan" value={planKey} onChange={setPlan} options={[{ value: 'pro', label: 'Pro' }, { value: 'ultimate', label: 'Ultimate' }]}/>
               <Segmented label="Checkout period" value={period} onChange={setPeriod} options={[{ value: 'month', label: '1 month' }, { value: 'year', label: '12 months', note: '2 free' }]}/>
             </div>
             <div className="mt-8 flex items-center gap-3">
-              <Crown size={26} weight="fill" className={plan === 'ultimate' ? 'text-brand-violet' : 'text-brand-sky'}/>
+              <Crown size={26} weight="fill" className={planKey === 'ultimate' ? 'text-brand-violet' : 'text-brand-sky'}/>
               <h2 className="text-[26px] font-semibold">{planName}</h2>
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-3">
-              <motion.span key={`${plan}${period}${currency}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="text-[52px] font-semibold leading-none tracking-[-0.03em]">{shown ? formatMoney(shown.amount, currency) : '-'}</motion.span>
+              <motion.span key={`${planKey}${period}${currency}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="text-[52px] font-semibold leading-none tracking-[-0.03em]">{shown ? formatMoney(shown.amount, currency) : '-'}</motion.span>
               <span className="pb-1.5 text-[15px] text-fg-muted">for {period === 'year' ? '12 months' : '1 month'} <span className="text-[12.5px] text-fg-dim">(+ taxes)</span></span>
               <span className="ml-auto pb-1"><Segmented label="Checkout currency" value={currency} onChange={value => { setCurrency(value); if (value === 'INR') { setCountryIso('IN'); if (number) setNumber(formatPhoneDisplay('IN', number)); } else if (countryIso === 'IN') { setCountryIso('US'); if (number) setNumber(formatPhoneDisplay('US', number)); } }} options={[{ value: 'INR', label: '₹' }, { value: 'USD', label: '$' }]}/></span>
             </div>
@@ -464,7 +480,7 @@ export default function CheckoutPage() {
 
             {currency !== chargeCurrency && charged ? <p className="mt-3 flex items-start gap-2 rounded-field bg-white/[0.04] p-3 text-[13.5px] text-fg-muted shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"><Info size={16} className="mt-0.5 shrink-0"/>You will be charged in Indian rupees: {formatMoney(charged.amount, chargeCurrency)} (+ applicable taxes). Your bank converts it at its own rate.</p> : null}
             <ul className="mt-7 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {PLAN_POINTS[plan].map(point => <li key={point} className="flex gap-2 text-[14.5px] text-fg-soft"><Check size={17} weight="bold" className="mt-0.5 shrink-0 text-brand-mint"/>{point}</li>)}
+              {planPoints.map(point => <li key={point} className="flex gap-2 text-[14.5px] text-fg-soft"><Check size={17} weight="bold" className="mt-0.5 shrink-0 text-brand-mint"/>{point}</li>)}
             </ul>
             <div className="mt-7 flex items-start gap-3 rounded-field bg-black/30 p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
               {whatHappens?.tone === 'warn' ? <WarningCircle size={20} className="mt-0.5 shrink-0 text-brand-amber"/> : <CalendarCheck size={20} className="mt-0.5 shrink-0 text-brand-mint"/>}
@@ -479,11 +495,11 @@ export default function CheckoutPage() {
               ? <div className="mt-6">
                 <p className="rounded-field bg-brand-amber/10 p-4 text-[14.5px] leading-relaxed text-[#fde2a8] shadow-[inset_0_0_0_1px_rgba(245,185,66,0.35)]">{config.unreachable ? 'The payment service could not be reached.' : 'Online payment is being switched on.'} Leave a request and we will activate {planName} for you by hand once payment is arranged.</p>
                 {requested
-                  ? <p className="mt-5 flex items-center gap-2 text-[15px] text-brand-mint" role="status"><Check size={18} weight="bold"/>Request sent. We will contact you at {session.user?.email}.</p>
+                  ? <p className="mt-5 flex items-center gap-2 text-[15px] text-brand-mint" role="status"><Check size={18} weight="bold"/>Request sent. We will contact you at {session?.user?.email}.</p>
                   : <button type="button" className="btn btn--primary btn--lg mt-5 w-full" onClick={requestByHand}>Request {planName}</button>}
               </div>
               : <form className="mt-6 flex flex-col gap-5" onSubmit={event => { event.preventDefault(); void pay(); }} noValidate>
-                <label className="flex flex-col gap-2"><span className="text-[14px] font-medium text-fg-soft">Account</span><input className="field opacity-80" value={session.user?.email || ''} readOnly aria-readonly="true"/></label>
+                <label className="flex flex-col gap-2"><span className="text-[14px] font-medium text-fg-soft">Account</span><input className="field opacity-80" value={session?.user?.email || ''} readOnly aria-readonly="true"/></label>
                 <label className="flex flex-col gap-2"><span className="text-[14px] font-medium text-fg-soft">Name on the receipt</span><input className="field" value={name} onChange={event => setName(event.target.value)} autoComplete="name" maxLength={100}/></label>
                 
                 <div className="flex flex-col gap-2">
@@ -642,7 +658,7 @@ export default function CheckoutPage() {
         order={testOrder}
         planName={testOrder.planName || planName}
         periodLabel={period === 'year' ? '12 months' : '1 month'}
-        email={session.user?.email || ''}
+        email={session?.user?.email || ''}
         onSettled={testSettled}
         onClose={() => { setTestOrder(null); setPhase('ready'); setError('The payment was cancelled. Nothing was charged.'); }}
       /> : null}

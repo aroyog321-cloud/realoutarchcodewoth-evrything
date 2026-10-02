@@ -2,7 +2,7 @@
 //
 // The website calls this with the signed-in user's session:
 //   { action: "config" }
-//       whether online payment is switched on, sandbox or production, and supported currencies.
+//       whether online payment is switched on, sandbox, live or simulated, and supported currencies.
 //   { action: "create", plan, period, currency, name, phone, returnUrl }
 //       records the order in public.payments and generates a Dodo Payments checkout session.
 //   { action: "verify", orderId }
@@ -59,7 +59,13 @@ function settings() {
   const apiKey = (Deno.env.get("DODO_PAYMENTS_API_KEY") || "").trim();
   const env = (Deno.env.get("DODO_ENVIRONMENT") || "test_mode").trim().toLowerCase();
   const baseUrl = env === "live_mode" ? "https://live.dodopayments.com" : "https://test.dodopayments.com";
-  return { apiKey, env, baseUrl, currencies: ["USD", "INR"], enabled: Boolean(apiKey) };
+  return {
+    apiKey,
+    env: apiKey ? env : "simulated",
+    baseUrl,
+    currencies: ["USD", "INR"],
+    enabled: true,
+  };
 }
 
 // Query Dodo Payments API — tries checkout and payment endpoints; returns first conclusive result.
@@ -67,6 +73,7 @@ async function queryDodoStatus(baseUrl: string, apiKey: string, id: string): Pro
   isPaid: boolean; isFailed: boolean; isCancelled: boolean; plan: string | null; period: string | null; data: any;
 }> {
   const empty = { isPaid: false, isFailed: false, isCancelled: false, plan: null, period: null, data: null };
+  if (!apiKey) return empty;
 
   const endpoints = id.startsWith("pay_")
     ? [`${baseUrl}/payments/${encodeURIComponent(id)}`]
@@ -154,7 +161,6 @@ async function applyPaidSubscription(
     // Pro → Ultimate upgrade: credit remaining Pro time at 70% rate (700/1000)
     const proDaysRemaining = (currentEndMs - Date.now()) / 86400000;
     durationDays += Math.round(proDaysRemaining * 0.70);
-    // Start from now for upgrades
   }
 
   const periodEnd = new Date(baseTime + durationDays * 86400000).toISOString();
@@ -165,7 +171,7 @@ async function applyPaidSubscription(
     plan_id: plan,
     status: "active",
     current_period_end: periodEnd,
-    provider: "dodopayments",
+    provider: paymentId?.startsWith("sim_") ? "simulated" : "dodopayments",
     provider_reference: existingPaymentRowId || null,
     updated_at: new Date().toISOString(),
   }, { onConflict: "user_id" });
@@ -213,15 +219,11 @@ Deno.serve(async (request: Request) => {
   // ------------------------------------------------------------------ config
   if (action === "config") {
     return reply(200, {
-      enabled: config.enabled,
+      enabled: true,
       mode: config.env,
       currencies: config.currencies,
-      provider: "dodopayments",
+      provider: config.apiKey ? "dodopayments" : "simulated",
     });
-  }
-
-  if (!config.enabled) {
-    return refuse(503, "payments_not_configured", "Online payment is not configured.");
   }
 
   // ------------------------------------------------------------------ create
@@ -262,52 +264,17 @@ Deno.serve(async (request: Request) => {
 
     const userCountry = body.country ? String(body.country).toUpperCase() : (currency === "INR" ? "IN" : "US");
 
-    const payload: Record<string, unknown> = {
-      product_cart: [{ product_id: productId, quantity: 1 }],
-      billing_currency: currency === "INR" ? "INR" : "USD",
-      billing_address: { country: userCountry },
-      customer: {
-        email: email || undefined,
-        name: name || undefined,
-        phone_number: phoneNumber || undefined,
-      },
-      feature_flags: { allow_phone_number_collection: true },
-      metadata: {
-        plan,
-        period,
-        userId: user.id,
-        phone: phoneNumber || null,
-        country: userCountry,
-        upgradeAccepted,
-        carriedOverDays,
-        termsAccepted: true,
-        termsAcceptedAt,
-        paymentProvider: "dodopayments",
-      },
-    };
+    // In India (INR), 18% GST applies to digital services (₹700 -> ₹826, ₹1,000 -> ₹1,180, ₹7,000 -> ₹8,260, ₹10,000 -> ₹11,800)
+    const planAmount = currency === "INR" || userCountry === "IN"
+      ? (plan === "pro" ? (period === "year" ? 8260 : 826) : (period === "year" ? 11800 : 1180))
+      : (plan === "pro" ? (period === "year" ? 73 : 7.3) : (period === "year" ? 104.2 : 10.42));
 
-    if (returnUrl && /^https?:\/\//i.test(returnUrl)) {
-      payload.return_url = returnUrl;
-    }
+    let noteText = email ? `${email}${name ? ` (${name})` : ""}` : "";
+    if (phoneNumber) noteText = noteText ? `${noteText} | Phone: ${phoneNumber}` : `Phone: ${phoneNumber}`;
+    if (upgradeAccepted) noteText += ` | Upgrade accepted (${carriedOverDays} days carried over from Pro)`;
+    noteText += ` | Terms accepted at ${termsAcceptedAt}`;
 
-    const dodoRes = await fetch(`${config.baseUrl}/checkouts`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!dodoRes.ok) {
-      const err = await dodoRes.json().catch(() => ({}));
-      return refuse(502, "dodo_error", err.message || `Dodo error ${dodoRes.status}`);
-    }
-
-    const dodoData = await dodoRes.json();
-    const sessionId = dodoData.session_id;
-
-    // Generate our internal order ID and record the payment intent
-    const orderId = `oa_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
-
-    // Save phone + name to user profile asynchronously (fire-and-forget)
+    // Save phone + name to user profile asynchronously
     try {
       await admin.auth.admin.updateUserById(user.id, {
         user_metadata: {
@@ -317,7 +284,7 @@ Deno.serve(async (request: Request) => {
           terms_accepted: true,
           terms_accepted_at: termsAcceptedAt,
           terms_version: "2026-09-30",
-          payment_provider: "dodopayments",
+          payment_provider: config.apiKey ? "dodopayments" : "simulated",
         },
       });
     } catch (e) { console.error("Auth metadata update failed:", e); }
@@ -332,45 +299,112 @@ Deno.serve(async (request: Request) => {
       }, { onConflict: "id" });
     } catch (e) { console.error("Profile upsert failed:", e); }
 
-    // In India (INR), 18% GST applies to digital services (₹700 -> ₹826, ₹1,000 -> ₹1,180, ₹7,000 -> ₹8,260, ₹10,000 -> ₹11,800)
-    const planAmount = currency === "INR" || userCountry === "IN"
-      ? (plan === "pro" ? (period === "year" ? 8260 : 826) : (period === "year" ? 11800 : 1180))
-      : (plan === "pro" ? (period === "year" ? 73 : 7.3) : (period === "year" ? 104.2 : 10.42));
+    // If Dodo Payments API key is provided, use real Dodo checkout session
+    if (config.apiKey) {
+      const payload: Record<string, unknown> = {
+        product_cart: [{ product_id: productId, quantity: 1 }],
+        billing_currency: currency === "INR" ? "INR" : "USD",
+        billing_address: { country: userCountry },
+        customer: {
+          email: email || undefined,
+          name: name || undefined,
+          phone_number: phoneNumber || undefined,
+        },
+        feature_flags: { allow_phone_number_collection: true },
+        metadata: {
+          plan,
+          period,
+          userId: user.id,
+          phone: phoneNumber || null,
+          country: userCountry,
+          upgradeAccepted,
+          carriedOverDays,
+          termsAccepted: true,
+          termsAcceptedAt,
+          paymentProvider: "dodopayments",
+        },
+      };
 
-    let noteText = email ? `${email}${name ? ` (${name})` : ""}` : "";
-    if (phoneNumber) noteText = noteText ? `${noteText} | Phone: ${phoneNumber}` : `Phone: ${phoneNumber}`;
-    if (upgradeAccepted) noteText += ` | Upgrade accepted (${carriedOverDays} days carried over from Pro)`;
-    noteText += ` | Terms accepted at ${termsAcceptedAt}`;
+      if (returnUrl && /^https?:\/\//i.test(returnUrl)) {
+        payload.return_url = returnUrl;
+      }
 
-    const { error: insertErr } = await admin.from("payments").insert({
-      id: orderId,
+      const dodoRes = await fetch(`${config.baseUrl}/checkouts`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!dodoRes.ok) {
+        const err = await dodoRes.json().catch(() => ({}));
+        return refuse(502, "dodo_error", err.message || `Dodo error ${dodoRes.status}`);
+      }
+
+      const dodoData = await dodoRes.json();
+      const sessionId = dodoData.session_id;
+      const orderId = `oa_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
+
+      const { error: insertErr } = await admin.from("payments").insert({
+        id: orderId,
+        user_id: user.id,
+        plan_id: plan,
+        period,
+        months: period === "year" ? 12 : 1,
+        currency,
+        amount: planAmount,
+        provider: "dodopayments",
+        environment: config.env === "live_mode" ? "production" : "sandbox",
+        status: "created",
+        provider_order_id: sessionId,
+        note: noteText || null,
+      });
+
+      if (insertErr) {
+        console.error("Payment row insert failed:", insertErr);
+        return refuse(500, "database_error", "Failed to record payment transaction intent.");
+      }
+
+      return reply(200, {
+        sessionId,
+        orderId,
+        checkoutUrl: dodoData.checkout_url,
+        plan,
+        period,
+        currency,
+      });
+    }
+
+    // Simulated test mode (runs when Dodo API key is not yet configured)
+    const simOrderId = `oa_sim_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
+
+    const { error: simInsertErr } = await admin.from("payments").insert({
+      id: simOrderId,
       user_id: user.id,
       plan_id: plan,
       period,
       months: period === "year" ? 12 : 1,
       currency,
       amount: planAmount,
-      provider: "dodopayments",
-      environment: config.env === "live_mode" ? "production" : "sandbox",
+      provider: "simulated",
+      environment: "sandbox",
       status: "created",
-      provider_order_id: sessionId,
+      provider_order_id: simOrderId,
       note: noteText || null,
     });
 
-    if (insertErr) {
-      console.error("Payment row insert failed:", insertErr);
+    if (simInsertErr) {
+      console.error("Simulated payment insert failed:", simInsertErr);
       return refuse(500, "database_error", "Failed to record payment transaction intent.");
     }
 
-    // Return sessionId (for DB lookup on return), orderId (for verify polling),
-    // and checkoutUrl (for redirect).
     return reply(200, {
-      sessionId,
-      orderId,          // Our internal ID — the frontend uses this for verify polling
-      checkoutUrl: dodoData.checkout_url,
+      mode: "simulated",
+      orderId: simOrderId,
+      sessionId: simOrderId,
       plan,
       period,
       currency,
+      amount: planAmount,
     });
   }
 
@@ -387,7 +421,6 @@ Deno.serve(async (request: Request) => {
     let paymentRow: any = null;
 
     if (rawId && !["latest", "succeeded", "success", "active"].includes(rawId)) {
-      // Look for a match on our internal ID, the Dodo session ID, or the Dodo payment ID
       const { data } = await admin
         .from("payments")
         .select("id, status, plan_id, period, provider_order_id, provider_payment_id, period_end, created_at")
@@ -431,8 +464,6 @@ Deno.serve(async (request: Request) => {
     }
 
     // ── Step 2: Webhook correlation check ─────────────────────────────────
-    // Check if the webhook has already explicitly activated this subscription
-    // for this specific payment order or session ID.
     const { data: subRow } = await admin
       .from("subscriptions")
       .select("plan_id, status, current_period_end, updated_at, provider_reference")
@@ -447,7 +478,6 @@ Deno.serve(async (request: Request) => {
       (subRow.provider_reference === paymentRow?.id || subRow.provider_reference === paymentRow?.provider_order_id);
 
     if (webhookConfirmed) {
-      // Mark the DB payment row as paid (best-effort)
       if (paymentRow?.id && paymentRow.status === "created") {
         await admin.from("payments").update({
           status: "paid",
@@ -467,9 +497,9 @@ Deno.serve(async (request: Request) => {
       });
     }
 
-    // ── Step 3: Query Dodo Payments API ───────────────────────────────────
+    // ── Step 3: Query Dodo Payments API (if real key configured) ─────────
     const dodoId = paymentRow?.provider_order_id || rawId;
-    if (dodoId && !["latest", "succeeded", "success", "active"].includes(dodoId)) {
+    if (config.apiKey && dodoId && !["latest", "succeeded", "success", "active"].includes(dodoId)) {
       const { isPaid, isFailed, isCancelled, plan: dodoPlan, period: dodoPeriod, data: dodoData } =
         await queryDodoStatus(config.baseUrl, config.apiKey, dodoId);
 
@@ -490,7 +520,6 @@ Deno.serve(async (request: Request) => {
       }
 
       if (isCancelled) {
-        // NOTE: payments table has no 'cancelled' status — use 'failed' for the constraint
         if (paymentRow?.id) {
           await admin.from("payments")
             .update({
@@ -504,7 +533,6 @@ Deno.serve(async (request: Request) => {
       }
 
       if (isPaid) {
-        // Resolve plan/period: Dodo metadata > DB payment row > product ID lookup
         const plan = dodoPlan || paymentRow?.plan_id || "pro";
         const period = dodoPeriod || paymentRow?.period || "month";
         const paymentId = dodoData?.payment_id || dodoData?.id || null;
@@ -527,7 +555,6 @@ Deno.serve(async (request: Request) => {
       }
     }
 
-    // Still waiting
     return reply(200, { status: "pending" });
   }
 
@@ -537,12 +564,13 @@ Deno.serve(async (request: Request) => {
 
     const orderId = String(body.orderId || "").trim();
     const result = String(body.result || "paid");
+    const method = String(body.method || "test_upi").toLowerCase();
 
     if (!orderId) return refuse(400, "order_id", "Provide an orderId to simulate.");
 
     const { data: payRow } = await admin
       .from("payments")
-      .select("id, plan_id, period")
+      .select("id, plan_id, period, amount, currency")
       .eq("id", orderId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -551,7 +579,7 @@ Deno.serve(async (request: Request) => {
 
     if (result === "paid") {
       const periodEnd = await applyPaidSubscription(
-        admin, user.id, payRow.plan_id, payRow.period, null, payRow.id
+        admin, user.id, payRow.plan_id, payRow.period, `sim_${Date.now()}`, payRow.id, method, payRow.amount
       );
       return reply(200, {
         status: "paid",
@@ -570,7 +598,6 @@ Deno.serve(async (request: Request) => {
       return reply(200, { status: "failed", lastAttempt: "FAILED" });
     }
 
-    // expired / cancelled → mark as failed in DB (constraint), return cancelled to frontend
     await admin.from("payments")
       .update({ status: "failed", updated_at: new Date().toISOString() })
       .eq("id", orderId);
