@@ -89,7 +89,8 @@ export function useCatalog() {
 }
 
 export function priceOf(prices, planId, period, currency) {
-  return prices.find(row => row.plan_id === planId && row.period === period && row.currency === currency) || null;
+  if (!Array.isArray(prices)) return null;
+  return prices.find(row => row && row.plan_id === planId && row.period === period && row.currency === currency) || null;
 }
 
 // The comparison rows, read from a plan's limits. null means unlimited.

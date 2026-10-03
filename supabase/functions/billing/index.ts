@@ -577,7 +577,7 @@ Deno.serve(async (request: Request) => {
 
     if (!payRow) return refuse(404, "not_found", "Order not found.");
 
-    if (result === "paid") {
+    if (result === "paid" || result === "success") {
       const periodEnd = await applyPaidSubscription(
         admin, user.id, payRow.plan_id, payRow.period, `sim_${Date.now()}`, payRow.id, method, payRow.amount
       );

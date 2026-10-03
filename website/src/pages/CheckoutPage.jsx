@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowLeft, ArrowSquareOut, CalendarCheck, Check, CircleNotch, Crown, CreditCard, Flask, Info, Lock, ShieldCheck, WarningCircle,
@@ -49,7 +49,9 @@ function formatPhoneDisplay(iso, rawVal) {
     return digits;
   }
   if (iso === 'US' || iso === 'CA') {
-    const digits = cleanDigits(rawVal).slice(0, 10);
+    let digits = cleanDigits(rawVal);
+    if (digits.length > 10 && digits.startsWith('1')) digits = digits.slice(1);
+    digits = digits.slice(0, 10);
     if (digits.length > 6) return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
     if (digits.length > 3) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
     return digits;
@@ -73,7 +75,9 @@ function validatePhoneNumber(iso, number) {
     return /^[6-9]\d{9}$/.test(d);
   }
   if (iso === 'US' || iso === 'CA') {
-    return /^\d{10}$/.test(digits);
+    let d = digits;
+    if (d.length > 10 && d.startsWith('1')) d = d.slice(1);
+    return /^\d{10}$/.test(d);
   }
   if (iso === 'GB') {
     return /^\d{9,11}$/.test(digits);
@@ -92,6 +96,12 @@ function toE164(iso, code, number) {
     if (d.length > 10 && d.startsWith('91')) d = d.slice(2);
     else if (d.length > 10 && d.startsWith('0')) d = d.slice(1);
     return d ? `+91${d}` : '';
+  }
+  if (iso === 'US' || iso === 'CA') {
+    let d = digits;
+    if (d.length > 10 && d.startsWith('1')) d = d.slice(1);
+    const cleanCode = code.startsWith('+') ? code : `+${code}`;
+    return d ? `${cleanCode}${d}` : '';
   }
   if (iso === 'OTHER') {
     const raw = String(number || '').replace(/[^\d+]/g, '');
@@ -192,7 +202,16 @@ export default function CheckoutPage() {
   const initialPlan = (query?.get('plan') || '').toLowerCase() === 'ultimate' ? 'ultimate' : 'pro';
   const [plan, setPlan] = useState(initialPlan);
   const [period, setPeriod] = useState(query?.get('period') === 'year' ? 'year' : 'month');
-  const [currency, setCurrency] = useState(['INR', 'USD'].includes(query?.get('currency')) ? query.get('currency') : preferred);
+  const [currency, setCurrency] = useState(['INR', 'USD'].includes(query?.get('currency')) ? query.get('currency') : (preferred || 'USD'));
+
+  useEffect(() => {
+    const p = (query?.get('plan') || '').toLowerCase();
+    if (p === 'ultimate' || p === 'pro') setPlan(p);
+    const per = query?.get('period');
+    if (per === 'month' || per === 'year') setPeriod(per);
+    const cur = query?.get('currency');
+    if (cur === 'INR' || cur === 'USD') setCurrency(cur);
+  }, [query]);
   const [session, setSession] = useState(null);
   const [config, setConfig] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -232,13 +251,17 @@ export default function CheckoutPage() {
       setName(data.session.user?.user_metadata?.full_name || data.session.user?.user_metadata?.name || '');
       const userPhone = data.session.user?.user_metadata?.phone || data.session.user?.phone || '';
       if (userPhone) {
-        const match = COUNTRIES.find(c => c.code !== 'other' && userPhone.startsWith(c.code));
+        const sortedCountries = COUNTRIES.filter(c => c.code !== 'other' && userPhone.startsWith(c.code)).sort((a, b) => b.code.length - a.code.length);
+        const match = sortedCountries[0];
         if (match) {
           setCountryIso(match.iso);
           setNumber(formatPhoneDisplay(match.iso, userPhone.slice(match.code.length)));
+          if (match.iso === 'IN') setCurrency('INR');
+          else setCurrency(c => (c === 'INR' ? 'USD' : c));
         } else if (/^[6-9]\d{9}$/.test(userPhone)) {
           setCountryIso('IN');
           setNumber(formatPhoneDisplay('IN', userPhone));
+          setCurrency('INR');
         } else if (userPhone.startsWith('+')) {
           setCountryIso('OTHER');
           setNumber(userPhone);
@@ -291,11 +314,27 @@ export default function CheckoutPage() {
     if (`${window.location.pathname}${window.location.search}` !== url) window.history.replaceState(null, '', url);
   }, [planKey, period, currency, returning]);
 
+  const runRef = useRef(0);
+  useEffect(() => () => { runRef.current += 1; }, []);
+
+  // Reset phase if restored from browser bfcache
+  useEffect(() => {
+    const onShow = e => {
+      if (e.persisted) setPhase(p => (p === 'paying' || p === 'creating' ? 'ready' : p));
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
+
   const settle = useCallback(async orderId => {
+    const run = ++runRef.current;
     setPhase('verifying');
     setError('');
     try {
-      const outcome = await waitForPayment(orderId);
+      const outcome = await waitForPayment(orderId, {
+        isCancelled: () => run !== runRef.current,
+      });
+      if (run !== runRef.current) return;
       if (outcome?.status === 'paid') {
         setResult(outcome);
         setPhase('paid');
@@ -322,6 +361,7 @@ export default function CheckoutPage() {
       setResult({ orderId: retryId === 'latest' ? 'Your active account' : retryId, retryId });
       setPhase('pending');
     } catch (reason) {
+      if (run !== runRef.current) return;
       const retryId = orderId || 'latest';
       setResult({ orderId: retryId === 'latest' ? 'Your active account' : retryId, retryId });
       setPhase('pending');
@@ -346,10 +386,11 @@ export default function CheckoutPage() {
   }, [returning, session, query, returnOrder, settle]);
 
   const enabledCurrencies = config?.currencies || ['USD', 'INR'];
-  const chargeCurrency = enabledCurrencies.includes(currency) ? currency : 'USD';
-  const shown = priceOf(catalog?.prices, planKey, period, currency);
+  const safeCurrency = (typeof currency === 'string' && ['INR', 'USD'].includes(currency)) ? currency : 'USD';
+  const chargeCurrency = enabledCurrencies.includes(safeCurrency) ? safeCurrency : 'USD';
+  const shown = priceOf(catalog?.prices, planKey, period, safeCurrency);
   const charged = priceOf(catalog?.prices, planKey, period, chargeCurrency) || shown;
-  const monthlyEquivalent = priceOf(catalog?.prices, planKey, 'month', currency);
+  const monthlyEquivalent = priceOf(catalog?.prices, planKey, 'month', safeCurrency);
 
   const whatHappens = useMemo(() => {
     if (!quote) return null;
@@ -367,6 +408,7 @@ export default function CheckoutPage() {
   const needsUpgradeAcceptance = Boolean(quote?.kind === 'upgrade' && quote?.carriedOver > 0 && !upgradeAccepted);
 
   const pay = async () => {
+    if (phase === 'creating' || phase === 'paying') return;
     setTouched(true);
     if (!phoneOk) {
       if (countryIso === 'IN') {

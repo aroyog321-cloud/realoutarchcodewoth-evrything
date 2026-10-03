@@ -37,14 +37,21 @@ export function useCurrency() {
   return [currency, setCurrency];
 }
 
-export function formatMoney(amount, currency, { exact = false } = {}) {
+export function formatMoney(amount, currency = 'USD', { exact = false } = {}) {
   const value = Number(amount);
   if (!Number.isFinite(value)) return '';
+  const curr = typeof currency === 'string' && currency.length === 3 ? currency.toUpperCase() : 'USD';
   const whole = Number.isInteger(value);
-  return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: whole && !exact ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  try {
+    return new Intl.NumberFormat(curr === 'INR' ? 'en-IN' : 'en-US', {
+      style: 'currency',
+      currency: curr,
+      minimumFractionDigits: whole && !exact ? 0 : 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    const symbol = curr === 'INR' ? '₹' : curr === 'USD' ? '$' : `${curr} `;
+    return `${symbol}${value.toFixed(whole && !exact ? 0 : 2)}`;
+  }
 }
+

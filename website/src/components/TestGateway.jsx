@@ -48,6 +48,8 @@ export default function TestGateway({ order, planName, periodLabel, email, onSet
   const [method, setMethod] = useState('upi');
   const [fields, setFields] = useState({ upi: '', card: '', expiry: '', cvv: '', holder: '', bank: '', wallet: '' });
   const [busy, setBusy] = useState('');
+  const busyRef = useRef('');
+  busyRef.current = busy;
   const [error, setError] = useState('');
   const dialog = useRef(null);
   const set = key => event => setFields(value => ({ ...value, [key]: event.target.value }));
@@ -55,7 +57,7 @@ export default function TestGateway({ order, planName, periodLabel, email, onSet
 
   // Escape cancels, as in a real payment window; the page behind stays put.
   useEffect(() => {
-    const onKey = event => { if (event.key === 'Escape' && !busy) void settle('cancelled'); };
+    const onKey = event => { if (event.key === 'Escape' && !busyRef.current) void settle('cancelled'); };
     window.addEventListener('keydown', onKey);
     document.documentElement.style.overflow = 'hidden';
     window.__lenis?.stop?.();
@@ -65,12 +67,13 @@ export default function TestGateway({ order, planName, periodLabel, email, onSet
   }, []);
 
   async function settle(result) {
+    if (busyRef.current) return;
     setBusy(result);
     setError('');
     try {
       // A short pause reads like a bank answering and keeps a double click from sending twice.
       if (result !== 'cancelled') await new Promise(resolve => setTimeout(resolve, 1200));
-      const outcome = await billing.simulate(order.orderId, result, method);
+      const outcome = await billing.simulate(order.orderId, result === 'success' ? 'paid' : result, method);
       onSettled(outcome);
     } catch (reason) {
       setBusy('');

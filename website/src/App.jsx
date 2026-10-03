@@ -86,6 +86,43 @@ function PageFallback() {
   </div>;
 }
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Page render error:', error, info);
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <section className="mx-auto max-w-[560px] px-5 py-32 text-center">
+        <div className="card p-8 sm:p-10">
+          <h1 className="display text-[26px]">Could not load this page</h1>
+          <p className="mt-3 text-[15px] text-fg-muted">An unexpected error occurred while loading this view. You can reload or return home.</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button type="button" className="btn btn--primary" onClick={() => window.location.reload()}>Reload page</button>
+            <Link to="/" className="btn btn--glass" onClick={() => this.setState({ hasError: false })}>Back to home</Link>
+          </div>
+        </div>
+      </section>;
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const { path, hash, query } = useRouter();
   const Page = page(path);
@@ -111,9 +148,11 @@ export default function App() {
       ? <header className="relative z-[2] mx-auto flex h-20 max-w-page items-center px-5 md:px-8"><Link to="/" aria-label="OUTARCH home"><Lockup/></Link></header>
       : <Nav/>}
     <main id="main" className="relative z-[1]">
-      <Suspense fallback={<PageFallback/>}>
-        <Page/>
-      </Suspense>
+      <ErrorBoundary resetKey={path}>
+        <Suspense fallback={<PageFallback/>}>
+          <Page/>
+        </Suspense>
+      </ErrorBoundary>
     </main>
     {focused ? null : <Footer/>}
   </>;

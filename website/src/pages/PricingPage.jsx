@@ -30,7 +30,7 @@ export default function PricingPage() {
   useEffect(() => {
     if (!session) { setCurrent(null); return; }
     let alive = true;
-    website().rpc('get_entitlements').then(({ data }) => { if (alive) setCurrent(data?.plan?.id || 'free'); });
+    website().rpc('get_entitlements').then(({ data, error }) => { if (alive && !error) setCurrent(data?.plan?.id || 'free'); });
     return () => { alive = false; };
   }, [session]);
 

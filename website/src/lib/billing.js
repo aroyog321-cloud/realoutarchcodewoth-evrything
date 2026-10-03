@@ -31,11 +31,13 @@ export const billing = {
 // Strategy: poll 15 times with 2 s gaps (= 30 s total). The first few polls
 // happen quickly so the happy path (webhook already fired) resolves fast;
 // subsequent polls give the webhook time to land.
-export async function waitForPayment(orderId, { tries = 15, gap = 2000, onTick } = {}) {
+export async function waitForPayment(orderId, { tries = 15, gap = 2000, onTick, isCancelled } = {}) {
   let last = null;
   for (let attempt = 0; attempt < tries; attempt += 1) {
+    if (isCancelled?.()) return null;
     try {
       last = await billing.verify(orderId);
+      if (isCancelled?.()) return null;
       onTick?.(last, attempt);
       if (
         last?.status === 'paid' ||
@@ -47,7 +49,8 @@ export async function waitForPayment(orderId, { tries = 15, gap = 2000, onTick }
     } catch {
       // ignore transient network or edge function errors while polling
     }
+    if (isCancelled?.()) return null;
     await new Promise(resolve => setTimeout(resolve, gap));
   }
-  return last;
+  return isCancelled?.() ? null : last;
 }

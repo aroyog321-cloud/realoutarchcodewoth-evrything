@@ -208,40 +208,45 @@ export default function AccountPage() {
 
   const load = useCallback(async () => {
     setError('');
-    const { data: sessionData } = await website().auth.getSession();
-    if (!sessionData?.session) { navigate('/auth?next=/account', { replace: true }); return; }
+    try {
+      const { data: sessionData } = await website().auth.getSession();
+      if (!sessionData?.session) { navigate('/auth?next=/account', { replace: true }); return; }
 
-    const incomingSession = query.get('session_id') || query.get('sessionId') || (query.get('payment') === 'success' ? query.get('order_id') : null);
-    if (incomingSession) {
-      try {
-        await billing.verify(incomingSession);
-        setPaymentNotice('Payment verified. Your plan is active!');
-      } catch {
-        // Fallback silently if already verified by webhook
+      const incomingSession = query.get('session_id') || query.get('sessionId') || (query.get('payment') === 'success' ? query.get('order_id') : null);
+      if (incomingSession) {
+        try {
+          const verifyRes = await billing.verify(incomingSession);
+          if (verifyRes?.status === 'paid') {
+            setPaymentNotice('Payment verified. Your plan is active!');
+          }
+        } catch {
+          // Fallback silently if already verified by webhook
+        }
       }
-    } else if (query.get('payment') === 'success') {
-      setPaymentNotice('Payment successful. Your plan is active!');
+
+      const [{ data, error: rpcError }, { data: rows }, { count: totalPaidCount }] = await Promise.all([
+        website().rpc('get_entitlements'),
+        website().from('payments').select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at').order('created_at', { ascending: false }).limit(50),
+        website().from('payments').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
+      ]);
+      if (rpcError) {
+        // A session the server no longer accepts (revoked, or from another
+        // project): end it here and sign in again rather than show a broken page.
+        if (rpcError.code === 'PGRST301' || /jwt|token/i.test(rpcError.message || '')) {
+          await website().auth.signOut({ scope: 'local' });
+          navigate('/auth?next=/account', { replace: true });
+          return;
+        }
+        setError('Your plan could not be loaded. Check your connection and try again.');
+      } else setEntitlements(data);
+      const validRows = rows || [];
+      setPayments(validRows);
+      setPaidCount(typeof totalPaidCount === 'number' ? totalPaidCount : validRows.filter(r => r.status === 'paid').length);
+    } catch (err) {
+      setError(err?.message || 'Your account could not be loaded. Check your connection.');
+    } finally {
+      setLoading(false);
     }
-
-    const [{ data, error: rpcError }, { data: rows }, { count: totalPaidCount }] = await Promise.all([
-      website().rpc('get_entitlements'),
-      website().from('payments').select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at').order('created_at', { ascending: false }).limit(50),
-      website().from('payments').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
-    ]);
-    if (rpcError) {
-      // A session the server no longer accepts (revoked, or from another
-      // project): end it here and sign in again rather than show a broken page.
-      if (rpcError.code === 'PGRST301' || /jwt|token/i.test(rpcError.message || '')) {
-        await website().auth.signOut({ scope: 'local' });
-        navigate('/auth?next=/account', { replace: true });
-        return;
-      }
-      setError('Your plan could not be loaded. Check your connection and try again.');
-    } else setEntitlements(data);
-    const validRows = rows || [];
-    setPayments(validRows);
-    setPaidCount(typeof totalPaidCount === 'number' ? totalPaidCount : validRows.filter(r => r.status === 'paid').length);
-    setLoading(false);
   }, [navigate, query]);
 
   useEffect(() => { void load(); }, [load]);
