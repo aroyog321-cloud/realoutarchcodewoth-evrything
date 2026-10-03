@@ -4,7 +4,6 @@ import {
   ArrowLeft, ArrowSquareOut, CalendarCheck, Check, CircleNotch, Crown, CreditCard, Flask, Info, Lock, ShieldCheck, WarningCircle,
 } from '@phosphor-icons/react';
 import { Segmented } from '../components/Pricing.jsx';
-import TestGateway from '../components/TestGateway.jsx';
 import { EASE } from '../components/ui.jsx';
 import { billing, waitForPayment } from '../lib/billing.js';
 import { priceOf, useCatalog } from '../lib/catalog.js';
@@ -222,8 +221,6 @@ export default function CheckoutPage() {
   const [phase, setPhase] = useState(returning ? 'verifying' : 'loading');
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
-  // A test order open in the simulated payment window.
-  const [testOrder, setTestOrder] = useState(null);
 
   const planKey = (String(plan || '').toLowerCase() === 'ultimate') ? 'ultimate' : 'pro';
   const planPoints = PLAN_POINTS[planKey] || PLAN_POINTS.pro;
@@ -450,25 +447,11 @@ export default function CheckoutPage() {
         window.location.href = order.checkoutUrl;
         return;
       }
-      if (order?.mode === 'simulated') {
-        setTestOrder(order);
-        return;
-      }
       throw new Error('Payment gateway checkout URL not received. Please try again.');
     } catch (reason) {
       setPhase('ready');
       setError(reason?.message || 'The payment could not be started. Try again.');
     }
-  };
-
-  // The test payment window reports how the order ended.
-  const testSettled = outcome => {
-    setTestOrder(null);
-    if (outcome?.status === 'paid') { setResult(outcome); setPhase('paid'); return; }
-    setPhase('ready');
-    if (outcome?.status === 'expired') setError('This payment window expired before it was paid. Nothing was charged. Start again.');
-    else if (outcome?.lastAttempt === 'FAILED') setError('The payment was declined. Nothing was charged. Try again or use another method.');
-    else setError('The payment was cancelled. Nothing was charged.');
   };
 
   const requestByHand = async () => {
@@ -495,8 +478,12 @@ export default function CheckoutPage() {
       {['ready', 'creating', 'paying'].includes(phase) ? <motion.div key="form" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.5, ease: EASE }}>
         <Link to="/pricing" className="inline-flex items-center gap-1.5 text-[14px] text-fg-muted hover:text-fg"><ArrowLeft size={15}/>All plans</Link>
         <h1 className="display mt-4 text-[clamp(2rem,4vw,3rem)]">Checkout</h1>
-        {config?.mode === 'simulated' ? <p className="mt-3 inline-flex items-start gap-2 rounded-[14px] bg-brand-amber/10 px-3 py-1.5 text-[13px] text-brand-amber shadow-[inset_0_0_0_1px_rgba(245,185,66,0.35)]"><Flask size={15} className="mt-0.5 shrink-0"/>Test mode: payments are simulated until the live payment provider is connected. No money moves, and your plan switches on as it would after a real payment.</p> : null}
-        {config?.mode === 'sandbox' || config?.mode === 'test_mode' ? <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand-amber/10 px-3 py-1.5 text-[13px] text-brand-amber shadow-[inset_0_0_0_1px_rgba(245,185,66,0.35)]"><Info size={15}/>Test mode: test cards or UPI are enabled; no real money moves.</p> : null}
+        {config?.mode === 'sandbox' || config?.mode === 'test_mode' || config?.mode === 'simulated' ? (
+          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand-amber/10 px-3.5 py-1.5 text-[13px] text-brand-amber shadow-[inset_0_0_0_1px_rgba(245,185,66,0.35)]">
+            <Flask size={15} className="shrink-0"/>
+            Dodo Payments Sandbox: test cards and UPI are enabled on the payment gateway.
+          </p>
+        ) : null}
 
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="card relative overflow-hidden p-7 sm:p-9" style={{ background: planKey === 'ultimate' ? 'linear-gradient(145deg, rgba(155,123,255,0.18), rgba(255,255,255,0.02) 60%)' : 'linear-gradient(145deg, rgba(47,123,255,0.18), rgba(255,255,255,0.02) 60%)' }}>
@@ -693,17 +680,6 @@ export default function CheckoutPage() {
           </div>
         </div>
       </motion.div> : null}
-    </AnimatePresence>
-    <AnimatePresence>
-      {testOrder ? <TestGateway
-        key={testOrder.orderId}
-        order={testOrder}
-        planName={testOrder.planName || planName}
-        periodLabel={period === 'year' ? '12 months' : '1 month'}
-        email={session?.user?.email || ''}
-        onSettled={testSettled}
-        onClose={() => { setTestOrder(null); setPhase('ready'); setError('The payment was cancelled. Nothing was charged.'); }}
-      /> : null}
     </AnimatePresence>
   </section>;
 }

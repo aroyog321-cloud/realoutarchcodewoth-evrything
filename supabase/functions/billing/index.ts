@@ -56,12 +56,12 @@ function refuse(status: number, code: string, message: string): Response {
 }
 
 function settings() {
-  const apiKey = (Deno.env.get("DODO_PAYMENTS_API_KEY") || "").trim();
-  const env = (Deno.env.get("DODO_ENVIRONMENT") || "test_mode").trim().toLowerCase();
+  const apiKey = (Deno.env.get("DODO_PAYMENTS_API_KEY") || "21mvCEFFdwN5GIC4.Mjqh3XIUgtSl2Ut8kOY4haYFpxwnS9JQsE3eyNP9oaOBC7zb").trim();
+  const env = (Deno.env.get("DODO_ENVIRONMENT") || (apiKey.startsWith("live_") ? "live_mode" : "test_mode")).trim().toLowerCase();
   const baseUrl = env === "live_mode" ? "https://live.dodopayments.com" : "https://test.dodopayments.com";
   return {
     apiKey,
-    env: apiKey ? env : "simulated",
+    env,
     baseUrl,
     currencies: ["USD", "INR"],
     enabled: true,
