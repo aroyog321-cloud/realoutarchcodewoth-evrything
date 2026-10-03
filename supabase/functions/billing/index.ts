@@ -564,6 +564,9 @@ Deno.serve(async (request: Request) => {
 
   // ------------------------------------------------------------------ simulate (test / sandbox only)
   if (action === "simulate") {
+    if (config.env === "live_mode" || config.apiKey.startsWith("live_")) {
+      return refuse(403, "forbidden", "Payment simulation is disabled in live production mode.");
+    }
     if (!user?.id) return refuse(401, "auth", "Sign in to simulate a payment.");
 
     const orderId = String(body.orderId || "").trim();
