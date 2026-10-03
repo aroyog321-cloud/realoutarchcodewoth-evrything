@@ -23,6 +23,12 @@ function reply(status: number, body: unknown): Response {
 
 // Product ID → plan + period lookup
 const PRODUCT_MAP: Record<string, { plan: string; period: string }> = {
+  // Live products
+  "pdt_0Nov3J3YiTwFKjr6EsslN": { plan: "pro",      period: "month" },
+  "pdt_0Nov3J7j5e01EyiKgomhA": { plan: "pro",      period: "year"  },
+  "pdt_0Nov3JCi7Wi4Hd3g6UH37": { plan: "ultimate", period: "month" },
+  "pdt_0Nov3JFSpuBh3MPl5TBlJ": { plan: "ultimate", period: "year"  },
+  // Test products
   "pdt_0NohxyGlqUEFWQEpCzug5": { plan: "pro",      period: "month" },
   "pdt_0NohxyIVrgAJKAwIfAfCi": { plan: "pro",      period: "year"  },
   "pdt_0NohxyJbqntvWYdXdykwW": { plan: "ultimate", period: "month" },

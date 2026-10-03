@@ -19,17 +19,21 @@ const PERIODS = new Set(["month", "year"]);
 
 // Dodo Payments product IDs per plan + period
 const DODO_PRODUCTS: Record<string, Record<string, string>> = {
-  pro:      { month: "pdt_0NohxyGlqUEFWQEpCzug5", year: "pdt_0NohxyIVrgAJKAwIfAfCi" },
-  ultimate: { month: "pdt_0NohxyJbqntvWYdXdykwW", year: "pdt_0NohxyLvPont2ODalPpvX" },
+  pro:      { month: "pdt_0Nov3J3YiTwFKjr6EsslN", year: "pdt_0Nov3J7j5e01EyiKgomhA" },
+  ultimate: { month: "pdt_0Nov3JCi7Wi4Hd3g6UH37", year: "pdt_0Nov3JFSpuBh3MPl5TBlJ" },
 };
 
 // Reverse-lookup: given a Dodo product ID → { plan, period }
-const PRODUCT_PLAN: Record<string, { plan: string; period: string }> = {};
-for (const [plan, periods] of Object.entries(DODO_PRODUCTS)) {
-  for (const [period, pid] of Object.entries(periods)) {
-    PRODUCT_PLAN[pid] = { plan, period };
-  }
-}
+const PRODUCT_PLAN: Record<string, { plan: string; period: string }> = {
+  "pdt_0Nov3J3YiTwFKjr6EsslN": { plan: "pro", period: "month" },
+  "pdt_0Nov3J7j5e01EyiKgomhA": { plan: "pro", period: "year" },
+  "pdt_0Nov3JCi7Wi4Hd3g6UH37": { plan: "ultimate", period: "month" },
+  "pdt_0Nov3JFSpuBh3MPl5TBlJ": { plan: "ultimate", period: "year" },
+  "pdt_0NohxyGlqUEFWQEpCzug5": { plan: "pro", period: "month" },
+  "pdt_0NohxyIVrgAJKAwIfAfCi": { plan: "pro", period: "year" },
+  "pdt_0NohxyJbqntvWYdXdykwW": { plan: "ultimate", period: "month" },
+  "pdt_0NohxyLvPont2ODalPpvX": { plan: "ultimate", period: "year" },
+};
 
 // payments.status constraint: ('created','paid','failed','expired','refunded')
 // NOTE: 'cancelled' is NOT a valid payment status — map to 'failed' for the constraint.
@@ -56,8 +60,8 @@ function refuse(status: number, code: string, message: string): Response {
 }
 
 function settings() {
-  const apiKey = (Deno.env.get("DODO_PAYMENTS_API_KEY") || "21mvCEFFdwN5GIC4.Mjqh3XIUgtSl2Ut8kOY4haYFpxwnS9JQsE3eyNP9oaOBC7zb").trim();
-  const env = (Deno.env.get("DODO_ENVIRONMENT") || (apiKey.startsWith("live_") ? "live_mode" : "test_mode")).trim().toLowerCase();
+  const apiKey = (Deno.env.get("DODO_PAYMENTS_API_KEY") || "kOmSmA516cf2b6ia.yUVSx7O3V_Aw55NYe1LZYIKBTitURaqVfJAtHhGI4M8DZ15M").trim();
+  const env = (Deno.env.get("DODO_ENVIRONMENT") || "live_mode").trim().toLowerCase();
   const baseUrl = env === "live_mode" ? "https://live.dodopayments.com" : "https://test.dodopayments.com";
   return {
     apiKey,
