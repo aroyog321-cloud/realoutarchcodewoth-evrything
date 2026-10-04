@@ -6,7 +6,7 @@ import {
 import { PlanCards, PricingControls } from '../components/Pricing.jsx';
 import { Button, EASE, Reveal, SectionTitle, useSpotlight } from '../components/ui.jsx';
 import { Wordmark } from '../components/Brand.jsx';
-import { formatBytes, microsoftStoreLinks, useCatalog } from '../lib/catalog.js';
+import { formatBytes, microsoftStoreLinks, useCatalog, VS_CODE_MARKETPLACE_URL } from '../lib/catalog.js';
 import { useCurrency } from '../lib/currency.js';
 import { Link } from '../lib/router.jsx';
 
@@ -104,8 +104,10 @@ export function DownloadSection() {
               <span className="grid h-11 w-11 place-items-center rounded-[13px] bg-brand-violet/10 text-brand-violet shadow-[inset_0_0_0_1px_rgba(155,123,255,0.35)]"><Code size={22} weight="duotone"/></span>
               <div><h3 className="text-[18px] font-semibold">VS Code bridge</h3><p className="text-[13.5px] text-fg-muted">Ultimate</p></div>
             </div>
-            <p className="mt-4 text-[14.5px] leading-relaxed text-fg-muted">The extension is on its way to the official VS Code Marketplace. Once it is listed, install it from VS Code in one click, then connect it in OUTARCH under <span className="text-fg-soft">Integrations, VS Code Bridge</span>.</p>
-            <div className="mt-4"><span className="chip"><Code size={14}/>Coming soon to the VS Code Marketplace</span></div>
+            <p className="mt-4 text-[14.5px] leading-relaxed text-fg-muted">Install the extension from the official Visual Studio Marketplace in one click, then connect it in OUTARCH under <span className="text-fg-soft">Integrations, VS Code Bridge</span>.</p>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Button href={VS_CODE_MARKETPLACE_URL} target="_blank" rel="noreferrer" variant="primary" size="sm" magnetic={false}><Code size={16} weight="bold"/>Install for VS Code</Button>
+            </div>
             <p className="mt-4 text-[13px] text-fg-dim">It shares file paths, diagnostics, Git state and VS Code terminal activity with the app on this computer, never file contents. <Link to="/ai-data#vs-code-bridge" className="link-underline text-fg-muted hover:text-fg">What it shares</Link></p>
           </article>
         </Reveal>

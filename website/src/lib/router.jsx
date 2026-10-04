@@ -59,7 +59,8 @@ export function Link({ to, children, onClick, ...rest }) {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       if (rest.target === '_blank') return;
       event.preventDefault();
-      router.navigate(to);
+      if (router?.navigate) router.navigate(to);
+      else window.location.href = to;
     }}
     {...rest}
   >{children}</a>;

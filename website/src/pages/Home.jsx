@@ -16,13 +16,13 @@ export default function Home() {
     <ToolsMarquee/>
     <HowItWorks/>
     <Highlights/>
-    <Bento/>
-    <MemorySection/>
-    <MobileSection/>
-    <Security/>
-    <PricingSection/>
-    <DownloadSection/>
-    <FaqSection/>
-    <FinalCta/>
+    <div className="section-deferred"><Bento/></div>
+    <div className="section-deferred"><MemorySection/></div>
+    <div className="section-deferred"><MobileSection/></div>
+    <div className="section-deferred"><Security/></div>
+    <div className="section-deferred"><PricingSection/></div>
+    <div className="section-deferred"><DownloadSection/></div>
+    <div className="section-deferred"><FaqSection/></div>
+    <div className="section-deferred"><FinalCta/></div>
   </>;
 }

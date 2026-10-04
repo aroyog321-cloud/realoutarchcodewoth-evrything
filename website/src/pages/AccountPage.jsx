@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ArrowClockwise, ArrowSquareOut, CalendarBlank, Check, Code, Crown, DeviceMobile, DownloadSimple, Lock, Receipt, ShieldCheck, SignOut, Sparkle, WindowsLogo,
+  ArrowClockwise, ArrowSquareOut, CalendarBlank, Check, Code, Crown, DeviceMobile, DownloadSimple, Key, Lock, Receipt, ShieldCheck, SignOut, Sparkle, WindowsLogo,
 } from '@phosphor-icons/react';
 import { Button, EASE, Reveal } from '../components/ui.jsx';
 import { billing } from '../lib/billing.js';
-import { priceOf, useCatalog } from '../lib/catalog.js';
+import { priceOf, useCatalog, VS_CODE_MARKETPLACE_URL } from '../lib/catalog.js';
 import { formatMoney, useCurrency } from '../lib/currency.js';
 import { Link, useRouter } from '../lib/router.jsx';
 import { website } from '../lib/supabase.js';
@@ -16,7 +16,7 @@ import { website } from '../lib/supabase.js';
 
 function formatDate(value) {
   const at = Date.parse(value || '');
-  return Number.isFinite(at) ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  return Number.isFinite(at) ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 }
 
 function limitRows(entitlements) {
@@ -37,10 +37,15 @@ function limitRows(entitlements) {
 
 const STATUS = {
   paid: ['Paid', 'text-brand-green bg-brand-green/10 shadow-[inset_0_0_0_1px_rgba(50,213,131,0.35)]'],
+  active: ['Paid', 'text-brand-green bg-brand-green/10 shadow-[inset_0_0_0_1px_rgba(50,213,131,0.35)]'],
+  completed: ['Paid', 'text-brand-green bg-brand-green/10 shadow-[inset_0_0_0_1px_rgba(50,213,131,0.35)]'],
   created: ['Not completed', 'text-fg-muted bg-white/[0.05] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]'],
+  pending: ['Pending', 'text-brand-amber bg-brand-amber/10 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'],
   failed: ['Failed', 'text-[#ffb3b3] bg-brand-red/10 shadow-[inset_0_0_0_1px_rgba(255,95,95,0.35)]'],
   expired: ['Expired', 'text-fg-dim bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'],
   refunded: ['Refunded', 'text-brand-sky bg-brand-blue/10 shadow-[inset_0_0_0_1px_rgba(47,123,255,0.35)]'],
+  canceled: ['Cancelled', 'text-fg-dim bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'],
+  cancelled: ['Cancelled', 'text-fg-dim bg-white/[0.04] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'],
 };
 
 // Everything the account service holds about the signed-in person, read with
@@ -79,6 +84,45 @@ async function exportAccountData(userId, entitlements) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function AccountSecurity({ email, provider }) {
+  const [resetState, setResetState] = useState('idle');
+  const [resetMessage, setResetMessage] = useState('');
+
+  const triggerReset = async () => {
+    if (!email) return;
+    setResetState('working');
+    setResetMessage('');
+    try {
+      const returnUrl = new URL(window.location.origin + '/auth');
+      returnUrl.searchParams.set('mode', 'reset-set');
+      const { error } = await website().auth.resetPasswordForEmail(email, {
+        redirectTo: returnUrl.toString(),
+      });
+      if (error) throw error;
+      setResetState('sent');
+      setResetMessage(`Password reset link sent to ${email}. Check your inbox.`);
+    } catch (err) {
+      setResetState('failed');
+      setResetMessage(err?.message || 'Could not send reset link. Try again later.');
+    }
+  };
+
+  if (provider === 'google') return null;
+
+  return <div className="card mt-6 p-7 sm:p-9">
+    <h2 className="flex items-center gap-2 text-[19px] font-semibold"><Key size={20} className="text-brand-sky"/>Security & Password</h2>
+    <p className="mt-3 max-w-[62ch] text-[14.5px] leading-relaxed text-fg-muted">Manage your password and sign-in credentials. A recovery link will let you choose a new password.</p>
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-field bg-white/[0.03] p-5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+      <div className="min-w-0">
+        <p className="text-[15px] font-medium">Change password</p>
+        <p className="mt-1 text-[13.5px] leading-relaxed text-fg-muted">We will email you a secure link to choose a new password.</p>
+        {resetMessage ? <p className={`mt-1 min-h-[18px] text-[12.5px] ${resetState === 'sent' ? 'text-brand-mint' : 'text-[#ffb3b3]'}`} role="status">{resetMessage}</p> : null}
+      </div>
+      <button type="button" onClick={triggerReset} disabled={resetState === 'working'} className="btn btn--glass btn--sm"><Key size={15}/>{resetState === 'working' ? 'Sending…' : resetState === 'sent' ? 'Send link again' : 'Send password reset link'}</button>
+    </div>
+  </div>;
+}
+
 function YourData({ entitlements }) {
   const [state, setState] = useState('idle');
   const download = async () => {
@@ -110,20 +154,41 @@ function daysLeft(value) {
 }
 
 // Four numbers at the top of the dashboard.
-function Summary({ plan, paid, ends, usedText, paymentsCount }) {
+function Summary({ plan, paid, ends, usedText, paymentsCount, totalPaymentsCount, onScrollToBilling }) {
   const days = daysLeft(ends);
+  const paymentsSubtitle = totalPaymentsCount && totalPaymentsCount > paymentsCount
+    ? `${paymentsCount} paid · ${totalPaymentsCount} total`
+    : paymentsCount ? 'View billing history' : 'None yet';
   const tiles = [
-    [Crown, 'Plan', plan.name, paid ? 'Prepaid' : 'Free forever'],
-    [CalendarBlank, 'Time left', paid ? (days == null ? 'No end date' : `${days} day${days === 1 ? '' : 's'}`) : 'Forever', paid && ends ? `Until ${formatDate(ends)}` : 'Never ends'],
-    [Sparkle, 'Mission AI today', usedText, 'Resets every day'],
-    [Receipt, 'Payments', String(paymentsCount), paymentsCount ? 'See billing history' : 'None yet'],
+    { icon: Crown, label: 'Plan', value: plan.name, note: paid ? 'Prepaid' : 'Free forever' },
+    { icon: CalendarBlank, label: 'Time left', value: paid ? (days == null ? 'No end date' : `${days} day${days === 1 ? '' : 's'}`) : 'Forever', note: paid && ends ? `Until ${formatDate(ends)}` : 'Never ends' },
+    { icon: Sparkle, label: 'Mission AI today', value: usedText, note: 'Resets every day' },
+    { icon: Receipt, label: 'Payments', value: String(paymentsCount), note: paymentsSubtitle, clickable: true, onClick: onScrollToBilling },
   ];
   return <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-    {tiles.map(([Icon, label, value, note]) => <div key={label} className="card p-5">
-      <p className="flex items-center gap-2 text-[13px] text-fg-muted"><Icon size={15}/>{label}</p>
-      <p className="mt-2 truncate text-[22px] font-semibold tracking-[-0.02em]">{value}</p>
-      <p className="mt-0.5 truncate text-[12.5px] text-fg-dim">{note}</p>
-    </div>)}
+    {tiles.map(({ icon: Icon, label, value, note, clickable, onClick }) => {
+      if (clickable) {
+        return <button
+          key={label}
+          type="button"
+          onClick={onClick}
+          className="card group cursor-pointer p-5 text-left transition-all hover:border-brand-sky/40 hover:bg-white/[0.04]"
+          title="Jump to Billing history"
+        >
+          <p className="flex items-center justify-between text-[13px] text-fg-muted group-hover:text-brand-sky">
+            <span className="flex items-center gap-2"><Icon size={15}/>{label}</span>
+            <span className="text-[11.5px] font-medium text-brand-sky/80 opacity-80 transition-opacity group-hover:opacity-100">View ↓</span>
+          </p>
+          <p className="mt-2 truncate text-[22px] font-semibold tracking-[-0.02em]">{value}</p>
+          <p className="mt-0.5 truncate text-[12.5px] text-fg-dim group-hover:text-fg-soft">{note}</p>
+        </button>;
+      }
+      return <div key={label} className="card p-5">
+        <p className="flex items-center gap-2 text-[13px] text-fg-muted"><Icon size={15}/>{label}</p>
+        <p className="mt-2 truncate text-[22px] font-semibold tracking-[-0.02em]">{value}</p>
+        <p className="mt-0.5 truncate text-[12.5px] text-fg-dim">{note}</p>
+      </div>;
+    })}
   </div>;
 }
 
@@ -182,8 +247,8 @@ function Apps({ limits, planId }) {
       {row(DeviceMobile, '63,208,181', 'Mobile companion', mobile ? 'Included in your plan. Pair your phone from OUTARCH, then add it to your home screen.' : 'Comes with Pro and Ultimate.', mobile
         ? <Link to="/mobile" className="btn btn--mint btn--sm"><DeviceMobile size={15}/>Install on your phone</Link>
         : <Link to="/checkout?plan=pro&period=month" className="btn btn--glass btn--sm"><Lock size={15}/>Upgrade to Pro</Link>)}
-      {row(Code, '155,123,255', 'VS Code bridge', vscode ? 'Included in your plan. The extension is coming soon to the VS Code Marketplace.' : 'Comes with Ultimate. The extension is coming soon to the VS Code Marketplace.', vscode
-        ? <span className="chip">Coming soon</span>
+      {row(Code, '155,123,255', 'VS Code bridge', vscode ? 'Included in your plan. Install from the Visual Studio Marketplace.' : 'Comes with Ultimate. Install from the Visual Studio Marketplace.', vscode
+        ? <a href={VS_CODE_MARKETPLACE_URL} target="_blank" rel="noreferrer" className="btn btn--primary btn--sm"><Code size={15}/>Install for VS Code</a>
         : <Link to={`/checkout?plan=ultimate&period=month`} className="btn btn--glass btn--sm"><Lock size={15}/>{planId === 'pro' ? 'Upgrade to Ultimate' : 'Get Ultimate'}</Link>)}
     </div>
   </div>;
@@ -201,13 +266,16 @@ export default function AccountPage() {
   const [entitlements, setEntitlements] = useState(null);
   const [payments, setPayments] = useState([]);
   const [paidCount, setPaidCount] = useState(0);
+  const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [paymentNotice, setPaymentNotice] = useState('');
+  const [paymentsError, setPaymentsError] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
+    setPaymentsError(false);
     try {
       const { data: sessionData } = await website().auth.getSession();
       if (!sessionData?.session) { navigate('/auth?next=/account', { replace: true }); return; }
@@ -224,24 +292,65 @@ export default function AccountPage() {
         }
       }
 
-      const [{ data, error: rpcError }, { data: rows }, { count: totalPaidCount }] = await Promise.all([
+      const userId = sessionData.session.user?.id;
+
+      const [entitlementsResult, paymentsResult, countResult] = await Promise.allSettled([
         website().rpc('get_entitlements'),
-        website().from('payments').select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at').order('created_at', { ascending: false }).limit(50),
+        website().from('payments').select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at').order('created_at', { ascending: false }).limit(200),
         website().from('payments').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
       ]);
-      if (rpcError) {
-        // A session the server no longer accepts (revoked, or from another
-        // project): end it here and sign in again rather than show a broken page.
-        if (rpcError.code === 'PGRST301' || /jwt|token/i.test(rpcError.message || '')) {
-          await website().auth.signOut({ scope: 'local' });
-          navigate('/auth?next=/account', { replace: true });
-          return;
+
+      if (entitlementsResult.status === 'fulfilled') {
+        const { data, error: rpcError } = entitlementsResult.value;
+        if (rpcError) {
+          // A session the server no longer accepts (revoked, or from another
+          // project): end it here and sign in again rather than show a broken page.
+          if (rpcError.code === 'PGRST301' || /jwt|token/i.test(rpcError.message || '')) {
+            await website().auth.signOut({ scope: 'local' });
+            navigate('/auth?next=/account', { replace: true });
+            return;
+          }
+          setError('Your plan could not be loaded. Check your connection and try again.');
+        } else {
+          setEntitlements(data);
         }
+      } else {
         setError('Your plan could not be loaded. Check your connection and try again.');
-      } else setEntitlements(data);
-      const validRows = rows || [];
-      setPayments(validRows);
-      setPaidCount(typeof totalPaidCount === 'number' ? totalPaidCount : validRows.filter(r => r.status === 'paid').length);
+      }
+
+      if (paymentsResult.status === 'fulfilled') {
+        const { data: rows, error: pError } = paymentsResult.value;
+        if (pError) {
+          console.warn('Could not load payments directly, trying fallback query:', pError);
+          if (userId) {
+            const { data: fallbackRows, error: fallbackErr } = await website()
+              .from('payments')
+              .select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at')
+              .eq('user_id', userId)
+              .order('created_at', { ascending: false })
+              .limit(200);
+            if (!fallbackErr && fallbackRows) {
+              setPayments(fallbackRows);
+              const paidRows = fallbackRows.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed');
+              setPaidCount(paidRows.length);
+            } else {
+              setPaymentsError(true);
+            }
+          } else {
+            setPaymentsError(true);
+          }
+        } else {
+          const validRows = rows || [];
+          setPayments(validRows);
+          if (countResult.status === 'fulfilled' && typeof countResult.value?.count === 'number') {
+            setPaidCount(countResult.value.count);
+          } else {
+            setPaidCount(validRows.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed').length);
+          }
+        }
+      } else {
+        setPaymentsError(true);
+      }
     } catch (err) {
       setError(err?.message || 'Your account could not be loaded. Check your connection.');
     } finally {
@@ -250,6 +359,20 @@ export default function AccountPage() {
   }, [navigate, query]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const scrollToBilling = useCallback(() => {
+    const el = document.getElementById('billing-history');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window.location.hash === '#billing' || window.location.hash === '#billing-history' || window.location.hash === '#payments')) {
+      const timer = setTimeout(scrollToBilling, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [scrollToBilling, loading]);
 
   const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
   const signOut = async () => { await website().auth.signOut({ scope: 'local' }); navigate('/auth'); };
@@ -278,6 +401,10 @@ export default function AccountPage() {
   const used = usage.used || 0;
   const accent = plan.id === 'ultimate' ? '155,123,255' : plan.id === 'pro' ? '47,123,255' : '63,208,181';
 
+  const displayedPayments = filter === 'paid'
+    ? payments.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed')
+    : payments;
+
   return <section className="mx-auto max-w-[980px] px-5 pb-24 pt-32 md:px-8">
     <Reveal>
       <div className="flex flex-wrap items-center gap-4">
@@ -293,7 +420,7 @@ export default function AccountPage() {
       </div>
     </Reveal>
 
-    <Reveal delay={0.03}><Summary plan={plan} paid={paid} ends={subscription.currentPeriodEnd} usedText={limit == null ? `${used} used` : `${used} of ${limit}`} paymentsCount={paidCount}/></Reveal>
+    <Reveal delay={0.03}><Summary plan={plan} paid={paid} ends={subscription.currentPeriodEnd} usedText={limit == null ? `${used} used` : `${used} of ${limit}`} paymentsCount={paidCount} totalPaymentsCount={payments.length} onScrollToBilling={scrollToBilling}/></Reveal>
 
     {paymentNotice ? <p className="mt-6 flex items-center gap-2 rounded-field bg-brand-green/10 px-4 py-3 text-[14px] text-brand-green shadow-[inset_0_0_0_1px_rgba(50,213,131,0.35)]" role="status"><Check size={16} weight="bold"/>{paymentNotice}</p> : null}
     {error ? <p className="mt-6 rounded-field bg-brand-red/10 px-4 py-3 text-[14px] text-[#ffb3b3] shadow-[inset_0_0_0_1px_rgba(255,95,95,0.4)]" role="alert">{error}</p> : null}
@@ -331,28 +458,106 @@ export default function AccountPage() {
     <Reveal delay={0.09}><Apps limits={entitlements?.limits} planId={plan.id}/></Reveal>
 
     <Reveal delay={0.1}>
-      <div className="card mt-6 p-7 sm:p-9">
-        <h2 className="flex items-center gap-2 text-[19px] font-semibold"><Receipt size={20} className="text-brand-sky"/>Billing history</h2>
-        {payments.length
-          ? <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-[14px]">
-              <thead><tr className="text-[12.5px] text-fg-dim"><th className="pb-3 font-medium">Date</th><th className="pb-3 font-medium">Plan</th><th className="pb-3 font-medium">Amount</th><th className="pb-3 font-medium">Status</th><th className="pb-3 font-medium">Order reference</th></tr></thead>
-              <tbody>
-                {payments.map(row => {
-                  const [label, style] = STATUS[row.status] || STATUS.created;
-                  return <tr key={row.id} className="border-t border-line-soft">
-                    <td className="py-3 text-fg-soft">{formatDate(row.paid_at || row.created_at)}</td>
-                    <td className="py-3 capitalize">{row.plan_id} · {row.period === 'year' ? '12 months' : '1 month'}</td>
-                    <td className="py-3 font-mono">{formatMoney(row.amount, row.currency, { exact: true })}</td>
-                    <td className="py-3"><span className={`rounded-full px-2.5 py-1 text-[12px] font-medium ${style}`}>{label}</span>{row.provider === 'simulated' ? <span className="ml-2 text-[12px] text-brand-amber">Test</span> : null}</td>
-                    <td className="py-3 font-mono text-[12.5px] text-fg-dim">{row.id}</td>
-                  </tr>;
-                })}
-              </tbody>
-            </table>
+      <div id="billing-history" className="card mt-6 scroll-mt-24 p-7 sm:p-9">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-[19px] font-semibold"><Receipt size={20} className="text-brand-sky"/>Billing history</h2>
+            <p className="mt-1 text-[13.5px] text-fg-muted">
+              {paidCount} paid {paidCount === 1 ? 'transaction' : 'transactions'}
+              {payments.length > paidCount ? ` · ${payments.length - paidCount} uncompleted or draft ${payments.length - paidCount === 1 ? 'checkout' : 'checkouts'}` : ''}
+            </p>
           </div>
-          : <p className="mt-4 text-[14.5px] text-fg-muted">No payments yet. When you buy a plan, the receipt and its order reference appear here.</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            {payments.length > 0 ? (
+              <div className="flex items-center gap-1 rounded-full bg-white/[0.04] p-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+                <button
+                  type="button"
+                  className={`rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors ${filter === 'all' ? 'bg-white/15 text-white shadow-sm' : 'text-fg-muted hover:text-fg'}`}
+                  onClick={() => setFilter('all')}
+                >
+                  All ({payments.length})
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors ${filter === 'paid' ? 'bg-brand-mint/20 text-brand-mint shadow-sm' : 'text-fg-muted hover:text-fg'}`}
+                  onClick={() => setFilter('paid')}
+                >
+                  Paid ({paidCount})
+                </button>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              className="btn btn--glass btn--sm"
+              title="Refresh billing history"
+              aria-label="Refresh billing history"
+            >
+              <ArrowClockwise size={14} className={refreshing ? 'animate-spin' : ''}/>
+            </button>
+          </div>
+        </div>
+
+        {paymentsError ? (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-field bg-brand-red/10 px-4 py-3 text-[13.5px] text-[#ffb3b3] shadow-[inset_0_0_0_1px_rgba(255,95,95,0.35)]" role="alert">
+            <span>Could not load billing history. Check your connection and try again.</span>
+            <button type="button" onClick={refresh} className="btn btn--glass btn--sm text-white">Retry</button>
+          </div>
+        ) : null}
+
+        {payments.length > 0 ? (
+          displayedPayments.length > 0 ? (
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-[14px]">
+                <thead>
+                  <tr className="text-[12.5px] text-fg-dim">
+                    <th className="pb-3 font-medium">Date</th>
+                    <th className="pb-3 font-medium">Plan</th>
+                    <th className="pb-3 font-medium">Amount</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Order reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedPayments.map(row => {
+                    const [label, style] = STATUS[row.status] || [
+                      (row.status || 'Created').charAt(0).toUpperCase() + (row.status || 'Created').slice(1),
+                      'text-fg-muted bg-white/[0.05] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]'
+                    ];
+                    return <tr key={row.id} className="border-t border-line-soft">
+                      <td className="py-3 text-fg-soft">{formatDate(row.paid_at || row.created_at)}</td>
+                      <td className="py-3 capitalize">{row.plan_id || 'Plan'} · {row.period === 'year' ? '12 months' : '1 month'}</td>
+                      <td className="py-3 font-mono">{formatMoney(row.amount, row.currency, { exact: true })}</td>
+                      <td className="py-3"><span className={`rounded-full px-2.5 py-1 text-[12px] font-medium ${style}`}>{label}</span>{row.provider === 'simulated' ? <span className="ml-2 text-[12px] text-brand-amber">Test</span> : null}</td>
+                      <td className="py-3 font-mono text-[12.5px] text-fg-dim">{row.id}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-field bg-white/[0.02] p-6 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+              <p className="text-[14px] text-fg-muted">
+                {filter === 'paid' ? 'No paid transactions found in this view.' : 'No transactions matching this filter.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setFilter('all')}
+                className="btn btn--glass btn--sm mt-3"
+              >
+                Show all {payments.length} checkouts
+              </button>
+            </div>
+          )
+        ) : (
+          <p className="mt-4 text-[14.5px] text-fg-muted">No payments yet. When you buy a plan, the receipt and its order reference appear here.</p>
+        )}
       </div>
+    </Reveal>
+
+    <Reveal delay={0.11}>
+      <AccountSecurity email={user.email} provider={user.provider}/>
     </Reveal>
 
     <Reveal delay={0.12}>

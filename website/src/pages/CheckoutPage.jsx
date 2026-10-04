@@ -214,6 +214,7 @@ export default function CheckoutPage() {
   const [session, setSession] = useState(null);
   const [config, setConfig] = useState(null);
   const [quote, setQuote] = useState(null);
+  const [quoteRetry, setQuoteRetry] = useState(0);
   const [name, setName] = useState('');
   const [countryIso, setCountryIso] = useState(currency === 'INR' ? 'IN' : 'US');
   const [number, setNumber] = useState('');
@@ -293,16 +294,29 @@ export default function CheckoutPage() {
           navigate(`/auth?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`, { replace: true });
           return;
         }
-        setQuote(quoteError ? { blocked: false, planId: planKey, kind: 'new', endsAt: null } : (data || { blocked: false, planId: planKey, kind: 'new', endsAt: null }));
+        if (quoteError) {
+          setQuote(null);
+          setError(quoteError.message || 'Could not verify plan pricing and eligibility. Please try again.');
+          setPhase(value => (value === 'loading' ? 'ready' : value));
+          return;
+        }
+        if (!data || typeof data !== 'object') {
+          setQuote(null);
+          setError('Received an unexpected response for plan pricing. Please try again.');
+          setPhase(value => (value === 'loading' ? 'ready' : value));
+          return;
+        }
+        setQuote(data);
         setPhase(value => (value === 'loading' ? 'ready' : value));
       })
-      .catch(() => {
+      .catch(err => {
         if (!alive) return;
-        setQuote({ blocked: false, planId: planKey, kind: 'new', endsAt: null });
+        setQuote(null);
+        setError(err?.message || 'Could not reach the account service to verify plan quote. Check your connection and try again.');
         setPhase(value => (value === 'loading' ? 'ready' : value));
       });
     return () => { alive = false; };
-  }, [session, planKey, period, navigate]);
+  }, [session, planKey, period, quoteRetry, navigate]);
 
   // Keep the address in step with the choices, so a refresh keeps them.
   useEffect(() => {
@@ -407,6 +421,10 @@ export default function CheckoutPage() {
   const pay = async () => {
     if (phase === 'creating' || phase === 'paying') return;
     setTouched(true);
+    if (!quote || quote.blocked) {
+      setError(quote?.reason || 'Cannot start checkout without a verified quote. Please try again.');
+      return;
+    }
     if (!phoneOk) {
       if (countryIso === 'IN') {
         setError('Enter a valid 10-digit Indian mobile number (e.g. 98765 43210).');
@@ -670,7 +688,31 @@ export default function CheckoutPage() {
                   </label>
                 </div>
 
-                <AnimatePresence>{error ? <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="alert" className="rounded-field bg-brand-red/10 px-4 py-3 text-[14px] text-[#ffb3b3] shadow-[inset_0_0_0_1px_rgba(255,95,95,0.4)]">{error}</motion.p> : null}</AnimatePresence>
+                <AnimatePresence>
+                  {error ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      role="alert"
+                      className="flex items-center justify-between gap-3 rounded-field bg-brand-red/10 px-4 py-3 text-[14px] text-[#ffb3b3] shadow-[inset_0_0_0_1px_rgba(255,95,95,0.4)]"
+                    >
+                      <span className="flex-1 leading-relaxed">{error}</span>
+                      {!quote ? (
+                        <button
+                          type="button"
+                          className="shrink-0 text-[13px] font-medium text-white underline hover:no-underline"
+                          onClick={() => {
+                            setError('');
+                            setQuoteRetry(c => c + 1);
+                          }}
+                        >
+                          Retry
+                        </button>
+                      ) : null}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
                 <button type="submit" className="btn btn--primary btn--lg w-full" disabled={!config || !quote || quote.blocked || !charged || phase !== 'ready' || needsUpgradeAcceptance || !policyAccepted}>
                   {phase === 'creating' || phase === 'paying' ? <CircleNotch size={18} className="animate-spin"/> : <Lock size={17} weight="bold"/>}
                   {phase === 'creating' ? 'Starting secure checkout…' : phase === 'paying' ? 'Complete the payment in the window' : charged ? `Pay ${formatMoney(charged.amount, chargeCurrency, { exact: false })} + taxes` : 'Pay'}

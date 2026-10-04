@@ -9,7 +9,7 @@ async function call(body) {
   if (error) {
     let payload = null;
     try { payload = await error.context?.json?.(); } catch { payload = null; }
-    const failure = new Error(payload?.error?.message || 'The payment service could not be reached. Check your connection and try again.');
+    const failure = new Error(payload?.error?.message || error.message || 'The payment service could not be reached. Check your connection and try again.');
     failure.code = payload?.error?.code || 'network';
     failure.status = error.context?.status;
     throw failure;

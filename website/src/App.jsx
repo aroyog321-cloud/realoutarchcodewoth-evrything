@@ -74,6 +74,7 @@ const TITLES = {
 function useSmoothScroll() {
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return undefined;
     const lenis = new Lenis({ lerp: 0.12, smoothWheel: true, allowNestedScroll: true, autoRaf: true });
     window.__lenis = lenis;
     return () => { lenis.destroy(); window.__lenis = null; };

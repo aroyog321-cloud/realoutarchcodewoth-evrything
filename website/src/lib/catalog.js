@@ -50,6 +50,8 @@ export function microsoftStoreLinks(id) {
   };
 }
 
+export const VS_CODE_MARKETPLACE_URL = 'https://marketplace.visualstudio.com/items?itemName=outarch.outarch-bridge&ssr=false';
+
 let catalogPromise = null;
 
 function loadCatalog() {

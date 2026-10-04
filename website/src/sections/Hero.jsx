@@ -1,9 +1,8 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useInView, useReducedMotion } from 'framer-motion';
 import { ArrowDown, BellRinging, CheckCircle, DownloadSimple, Play, ShieldCheck, Sparkle, WarningDiamond } from '@phosphor-icons/react';
 import { Button, EASE, Reveal } from '../components/ui.jsx';
-
-const DemoApp = lazy(() => import('../demo/DemoApp.jsx'));
+import DemoApp from '../demo/DemoApp.jsx';
 
 // The kinds of notice OUTARCH raises, as they look on a Windows desktop.
 const NOTICES = [
@@ -100,6 +99,7 @@ export function Hero() {
 
 export function DemoStage() {
   const reduce = useReducedMotion();
+
   // The window tilts up into place once, the first time it comes into view.
   // It used to follow every scroll frame, which redrew the whole replica each
   // frame and was the heaviest thing on the page to scroll past.
@@ -117,9 +117,7 @@ export function DemoStage() {
         transition={{ duration: 1.1, ease: EASE }}
         style={{ transformOrigin: '50% 0%' }}
       >
-        <Suspense fallback={<div className="flex h-[560px] w-full items-center justify-center rounded-[18px] bg-ink-800/80 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"><span className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-brand-sky"/></div>}>
-          <DemoApp/>
-        </Suspense>
+        <DemoApp/>
       </motion.div>
     </div>
     <p className="mt-4 text-center text-[12.5px] text-fg-dim">The live demo is a simulation. The app you download may differ from it in places.</p>

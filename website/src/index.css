@@ -238,6 +238,11 @@ a:hover .brand-icon__ghost, button:hover .brand-icon__ghost { transform: transla
 .field:focus { box-shadow: inset 0 0 0 1px #6aa6ff, 0 0 0 4px rgba(47,123,255,.2); background: #0d121a; }
 .field[aria-invalid="true"] { box-shadow: inset 0 0 0 1px #ff7a7a, 0 0 0 4px rgba(255,95,95,.14); }
 
+.section-deferred {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 800px;
+}
+
 }
 
 @media (prefers-reduced-motion: reduce) {

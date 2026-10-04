@@ -32,30 +32,43 @@ export function desktopFailure(state, message) {
   return `outarch://auth/callback?state=${encodeURIComponent(state)}#${fragment.toString()}`;
 }
 
-// Tokens a redirect left in the address (implicit flow): read once, then
+// Tokens a redirect left in the address (implicit flow, PKCE, or recovery): read once, then
 // removed so they are not left in the browser history.
 export function takeRedirectTokens(location = window.location) {
   const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
   const query = new URLSearchParams(location.search);
   const error = hash.get('error_description') || hash.get('error') || query.get('error_description') || query.get('error');
-  const accessToken = hash.get('access_token');
-  const refreshToken = hash.get('refresh_token');
+  const accessToken = hash.get('access_token') || query.get('access_token');
+  const refreshToken = hash.get('refresh_token') || query.get('refresh_token');
+  const tokenHash = query.get('token_hash') || hash.get('token_hash');
+  const code = query.get('code') || hash.get('code');
   const type = hash.get('type') || query.get('type') || null;
-  if (!error && !accessToken) return null;
+
+  if (!error && !accessToken && !tokenHash && !code) return null;
+
   const clean = new URL(location.href);
   clean.hash = '';
-  for (const key of ['error', 'error_code', 'error_description']) clean.searchParams.delete(key);
+  for (const key of ['error', 'error_code', 'error_description', 'access_token', 'refresh_token', 'token_hash', 'code']) {
+    clean.searchParams.delete(key);
+  }
+  if (type === 'recovery') {
+    clean.searchParams.delete('type');
+    clean.searchParams.set('mode', 'reset-set');
+  }
   window.history.replaceState(null, '', clean.toString());
+
   if (error) return { error: error.replace(/\+/g, ' ') };
   return {
     type,
-    session: {
+    tokenHash,
+    code,
+    session: accessToken ? {
       access_token: accessToken,
       refresh_token: refreshToken,
-      expires_in: Number(hash.get('expires_in')) || 3600,
-      expires_at: Number(hash.get('expires_at')) || null,
-      token_type: hash.get('token_type') || 'bearer'
-    }
+      expires_in: Number(hash.get('expires_in') || query.get('expires_in')) || 3600,
+      expires_at: Number(hash.get('expires_at') || query.get('expires_at')) || null,
+      token_type: hash.get('token_type') || query.get('token_type') || 'bearer'
+    } : null
   };
 }
 
