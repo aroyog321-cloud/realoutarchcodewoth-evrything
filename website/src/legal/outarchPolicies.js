@@ -19,8 +19,8 @@
 // This file holds no JSX so the desktop renderer and the website can both
 // import it.
 
-export const LEGAL_VERSION = "2026-09-23";
-export const LEGAL_UPDATED = "23 September 2026";
+export const LEGAL_VERSION = "2026-10-04";
+export const LEGAL_UPDATED = "4 October 2026";
 
 // The documents a person agrees to before the desktop app starts. The privacy
 // policy is a notice, not something to agree to, so it is linked, not ticked.
@@ -55,7 +55,7 @@ const POLICY_LIST = [
         heading: "Plans",
         blocks: [
           "OUTARCH has a Free plan and paid plans (Pro and Ultimate). What each plan includes is shown on the pricing page and in the app. Paid plans are prepaid for a fixed period and do not renew automatically.",
-          "The terms for buying a paid plan online, including the payment provider and how payments are handled, are shown on the checkout page when online checkout is available. We may change plans and prices for future purchases; a period you have already paid for keeps the plan and price you bought."
+          "Online checkout is processed securely by Dodo Payments as Merchant of Record. We may change plans and prices for future purchases; a period you have already paid for keeps the plan and price you bought. We may introduce automatic subscriptions and renewals in the future after updating our terms."
         ]
       },
       {
@@ -223,7 +223,7 @@ const POLICY_LIST = [
             "Plan requests: if you ask for a plan from the app or website, the plan and any message you write.",
             "Sign-in and security records kept by our authentication provider, such as sign-in times and the IP address and browser used."
           ],
-          "When online checkout is available, payment records (order reference, plan, amount, currency, status and payment method type) are kept as described on the checkout page. We do not receive card, UPI or bank account details."
+          "For online purchases, payment records (order reference, plan, amount, currency, status and payment method type) are kept as described on the checkout page. Dodo Payments acts as Merchant of Record; we do not receive or store card numbers, UPI PINs or bank account details."
         ]
       },
       {
@@ -581,7 +581,7 @@ const POLICY_LIST = [
         blocks: [
           [
             "Sign in with Google takes you to Google, which uses its own cookies under Google's policies.",
-            "When online checkout is available, the payment window is provided by the payment provider, which may use its own cookies or storage to process the payment and prevent fraud."
+            "The online checkout window is provided by Dodo Payments (Merchant of Record), which may use its own cookies or storage to process payments and prevent fraud."
           ]
         ]
       },
@@ -717,9 +717,9 @@ const POLICY_LIST = [
             "Supabase: sign-in, account database, plan checks, release downloads and the AI proxy. Receives your account data and sign-in requests. Hosted in Mumbai, India.",
             "Google: Sign in with Google (if you choose it), and Gemini as a built-in Mission AI model. Receives your Google sign-in, and Mission AI requests sent to Gemini.",
             "NVIDIA: a built-in Mission AI model provider. Receives Mission AI requests sent to its models.",
-            "Our website hosting provider: serves the website and, like any web host, sees the IP address and browser of each visit."
-          ],
-          "When online checkout becomes available, the payment provider will be listed here with what it receives."
+            "Our website hosting provider: serves the website and, like any web host, sees the IP address and browser of each visit.",
+            "Dodo Payments: Merchant of Record and payment processing for paid plans. Receives customer contact information, billing country and payment transaction records."
+          ]
         ]
       },
       {
@@ -773,7 +773,6 @@ const POLICY_LIST = [
             "Lenis (MIT)",
             "Phosphor Icons (MIT) and Lucide (ISC)",
             "clsx and tailwind-merge (MIT)",
-            "Cashfree JS (MIT)",
             "Geist, Geist Mono, Inter and JetBrains Mono typefaces (SIL Open Font License 1.1)"
           ]
         ]

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ArrowClockwise, ArrowSquareOut, CalendarBlank, Check, Code, Crown, DeviceMobile, DownloadSimple, Key, Lock, Receipt, ShieldCheck, SignOut, Sparkle, WindowsLogo,
+  ArrowClockwise, ArrowSquareOut, CalendarBlank, Check, Code, Copy, Crown, DeviceMobile, DownloadSimple, Key, Lock, Receipt, ShieldCheck, SignOut, Sparkle, WindowsLogo,
 } from '@phosphor-icons/react';
 import { Button, EASE, Reveal } from '../components/ui.jsx';
 import { billing } from '../lib/billing.js';
@@ -148,6 +148,28 @@ function YourData({ entitlements }) {
   </div>;
 }
 
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e) => {
+    e.stopPropagation();
+    if (!text) return;
+    navigator.clipboard?.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={copied ? 'Copied to clipboard' : 'Copy order reference'}
+      className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[12px] text-fg-dim transition-colors hover:bg-white/10 hover:text-fg"
+    >
+      <span>{text}</span>
+      {copied ? <Check size={13} className="text-brand-green"/> : <Copy size={13} className="opacity-60"/>}
+    </button>
+  );
+}
+
 function daysLeft(value) {
   const at = Date.parse(value || '');
   return Number.isFinite(at) ? Math.max(0, Math.ceil((at - Date.now()) / 86400000)) : null;
@@ -173,7 +195,7 @@ function Summary({ plan, paid, ends, usedText, paymentsCount, totalPaymentsCount
           type="button"
           onClick={onClick}
           className="card group cursor-pointer p-5 text-left transition-all hover:border-brand-sky/40 hover:bg-white/[0.04]"
-          title="Jump to Billing history"
+          title="Open Billing & Payments"
         >
           <p className="flex items-center justify-between text-[13px] text-fg-muted group-hover:text-brand-sky">
             <span className="flex items-center gap-2"><Icon size={15}/>{label}</span>
@@ -296,15 +318,17 @@ export default function AccountPage() {
 
       const [entitlementsResult, paymentsResult, countResult] = await Promise.allSettled([
         website().rpc('get_entitlements'),
-        website().from('payments').select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at').order('created_at', { ascending: false }).limit(200),
-        website().from('payments').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
+        userId
+          ? website().from('payments').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+          : Promise.resolve({ data: [], error: null }),
+        userId
+          ? website().from('payments').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'paid')
+          : Promise.resolve({ count: 0, error: null }),
       ]);
 
       if (entitlementsResult.status === 'fulfilled') {
         const { data, error: rpcError } = entitlementsResult.value;
         if (rpcError) {
-          // A session the server no longer accepts (revoked, or from another
-          // project): end it here and sign in again rather than show a broken page.
           if (rpcError.code === 'PGRST301' || /jwt|token/i.test(rpcError.message || '')) {
             await website().auth.signOut({ scope: 'local' });
             navigate('/auth?next=/account', { replace: true });
@@ -318,37 +342,20 @@ export default function AccountPage() {
         setError('Your plan could not be loaded. Check your connection and try again.');
       }
 
-      if (paymentsResult.status === 'fulfilled') {
-        const { data: rows, error: pError } = paymentsResult.value;
-        if (pError) {
-          console.warn('Could not load payments directly, trying fallback query:', pError);
-          if (userId) {
-            const { data: fallbackRows, error: fallbackErr } = await website()
-              .from('payments')
-              .select('id,plan_id,period,currency,amount,status,provider,payment_method,period_end,created_at,paid_at')
-              .eq('user_id', userId)
-              .order('created_at', { ascending: false })
-              .limit(200);
-            if (!fallbackErr && fallbackRows) {
-              setPayments(fallbackRows);
-              const paidRows = fallbackRows.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed');
-              setPaidCount(paidRows.length);
-            } else {
-              setPaymentsError(true);
-            }
-          } else {
-            setPaymentsError(true);
-          }
+      // Handle payments result - only use real user rows, do not invent fake records
+      if (paymentsResult.status === 'fulfilled' && !paymentsResult.value.error) {
+        const rows = Array.isArray(paymentsResult.value.data) ? paymentsResult.value.data : [];
+        setPayments(rows);
+
+        const paidRows = rows.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed');
+        if (countResult.status === 'fulfilled' && typeof countResult.value?.count === 'number' && !countResult.value.error) {
+          setPaidCount(countResult.value.count);
         } else {
-          const validRows = rows || [];
-          setPayments(validRows);
-          if (countResult.status === 'fulfilled' && typeof countResult.value?.count === 'number') {
-            setPaidCount(countResult.value.count);
-          } else {
-            setPaidCount(validRows.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed').length);
-          }
+          setPaidCount(paidRows.length);
         }
       } else {
+        setPayments([]);
+        setPaidCount(0);
         setPaymentsError(true);
       }
     } catch (err) {
@@ -368,11 +375,20 @@ export default function AccountPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window.location.hash === '#billing' || window.location.hash === '#billing-history' || window.location.hash === '#payments')) {
-      const timer = setTimeout(scrollToBilling, 250);
-      return () => clearTimeout(timer);
+    if (typeof window !== 'undefined' && !loading) {
+      const hash = window.location.hash;
+      const tabParam = query.get('tab');
+      if (tabParam === 'billing' || hash === '#billing' || hash === '#billing-history' || hash === '#payments') {
+        setTimeout(scrollToBilling, 150);
+      } else if (tabParam === 'plan' || hash === '#plan') {
+        setTimeout(() => document.getElementById('plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+      } else if (tabParam === 'apps' || hash === '#apps') {
+        setTimeout(() => document.getElementById('apps')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+      } else if (tabParam === 'security' || hash === '#security') {
+        setTimeout(() => document.getElementById('security')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+      }
     }
-  }, [scrollToBilling, loading]);
+  }, [query, scrollToBilling, loading]);
 
   const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
   const signOut = async () => { await website().auth.signOut({ scope: 'local' }); navigate('/auth'); };
@@ -403,6 +419,8 @@ export default function AccountPage() {
 
   const displayedPayments = filter === 'paid'
     ? payments.filter(r => r.status === 'paid' || r.status === 'active' || r.status === 'completed')
+    : filter === 'pending'
+    ? payments.filter(r => r.status === 'created' || r.status === 'pending')
     : payments;
 
   return <section className="mx-auto max-w-[980px] px-5 pb-24 pt-32 md:px-8">
@@ -420,13 +438,16 @@ export default function AccountPage() {
       </div>
     </Reveal>
 
-    <Reveal delay={0.03}><Summary plan={plan} paid={paid} ends={subscription.currentPeriodEnd} usedText={limit == null ? `${used} used` : `${used} of ${limit}`} paymentsCount={paidCount} totalPaymentsCount={payments.length} onScrollToBilling={scrollToBilling}/></Reveal>
+    <Reveal delay={0.03}>
+      <Summary plan={plan} paid={paid} ends={subscription.currentPeriodEnd} usedText={limit == null ? `${used} used` : `${used} of ${limit}`} paymentsCount={paidCount} totalPaymentsCount={payments.length} onScrollToBilling={scrollToBilling}/>
+    </Reveal>
 
     {paymentNotice ? <p className="mt-6 flex items-center gap-2 rounded-field bg-brand-green/10 px-4 py-3 text-[14px] text-brand-green shadow-[inset_0_0_0_1px_rgba(50,213,131,0.35)]" role="status"><Check size={16} weight="bold"/>{paymentNotice}</p> : null}
     {error ? <p className="mt-6 rounded-field bg-brand-red/10 px-4 py-3 text-[14px] text-[#ffb3b3] shadow-[inset_0_0_0_1px_rgba(255,95,95,0.4)]" role="alert">{error}</p> : null}
 
+    {/* Your Plan Card */}
     <Reveal delay={0.06}>
-      <div className="card relative mt-8 overflow-hidden p-7 sm:p-9" style={{ background: `linear-gradient(135deg, rgba(${accent},0.2), rgba(255,255,255,0.02) 60%)` }}>
+      <div id="plan" className="card relative mt-8 scroll-mt-24 overflow-hidden p-7 sm:p-9" style={{ background: `linear-gradient(135deg, rgba(${accent},0.2), rgba(255,255,255,0.02) 60%)` }}>
         <div className="flex flex-wrap items-center gap-5">
           <motion.span initial={{ rotate: -12, scale: 0.8 }} animate={{ rotate: 0, scale: 1 }} transition={{ duration: 0.8, ease: EASE }} className="grid h-14 w-14 place-items-center rounded-[16px]" style={{ background: `rgba(${accent},0.18)`, color: `rgb(${accent})`, boxShadow: `inset 0 0 0 1px rgba(${accent},0.45)` }}><Crown size={28} weight="fill"/></motion.span>
           <div className="mr-auto">
@@ -455,13 +476,18 @@ export default function AccountPage() {
 
     {!paid ? <Reveal delay={0.08}><Subscribe/></Reveal> : null}
 
-    <Reveal delay={0.09}><Apps limits={entitlements?.limits} planId={plan.id}/></Reveal>
+    <Reveal delay={0.09}>
+      <div id="apps" className="scroll-mt-24">
+        <Apps limits={entitlements?.limits} planId={plan.id}/>
+      </div>
+    </Reveal>
 
+    {/* Canonical Billing & Payment History Card */}
     <Reveal delay={0.1}>
       <div id="billing-history" className="card mt-6 scroll-mt-24 p-7 sm:p-9">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="flex items-center gap-2 text-[19px] font-semibold"><Receipt size={20} className="text-brand-sky"/>Billing history</h2>
+            <h2 className="flex items-center gap-2 text-[19px] font-semibold"><Receipt size={20} className="text-brand-sky"/>Billing & Payment History</h2>
             <p className="mt-1 text-[13.5px] text-fg-muted">
               {paidCount} paid {paidCount === 1 ? 'transaction' : 'transactions'}
               {payments.length > paidCount ? ` · ${payments.length - paidCount} uncompleted or draft ${payments.length - paidCount === 1 ? 'checkout' : 'checkouts'}` : ''}
@@ -484,6 +510,15 @@ export default function AccountPage() {
                 >
                   Paid ({paidCount})
                 </button>
+                {payments.length > paidCount ? (
+                  <button
+                    type="button"
+                    className={`rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors ${filter === 'pending' ? 'bg-white/20 text-white shadow-sm' : 'text-fg-muted hover:text-fg'}`}
+                    onClick={() => setFilter('pending')}
+                  >
+                    Drafts ({payments.length - paidCount})
+                  </button>
+                ) : null}
               </div>
             ) : null}
             <button
@@ -509,14 +544,14 @@ export default function AccountPage() {
         {payments.length > 0 ? (
           displayedPayments.length > 0 ? (
             <div className="mt-5 overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-[14px]">
+              <table className="w-full min-w-[580px] text-left text-[14px]">
                 <thead>
                   <tr className="text-[12.5px] text-fg-dim">
                     <th className="pb-3 font-medium">Date</th>
-                    <th className="pb-3 font-medium">Plan</th>
+                    <th className="pb-3 font-medium">Plan & Period</th>
                     <th className="pb-3 font-medium">Amount</th>
                     <th className="pb-3 font-medium">Status</th>
-                    <th className="pb-3 font-medium">Order reference</th>
+                    <th className="pb-3 font-medium">Order Reference</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -529,8 +564,13 @@ export default function AccountPage() {
                       <td className="py-3 text-fg-soft">{formatDate(row.paid_at || row.created_at)}</td>
                       <td className="py-3 capitalize">{row.plan_id || 'Plan'} · {row.period === 'year' ? '12 months' : '1 month'}</td>
                       <td className="py-3 font-mono">{formatMoney(row.amount, row.currency, { exact: true })}</td>
-                      <td className="py-3"><span className={`rounded-full px-2.5 py-1 text-[12px] font-medium ${style}`}>{label}</span>{row.provider === 'simulated' ? <span className="ml-2 text-[12px] text-brand-amber">Test</span> : null}</td>
-                      <td className="py-3 font-mono text-[12.5px] text-fg-dim">{row.id}</td>
+                      <td className="py-3">
+                        <span className={`rounded-full px-2.5 py-1 text-[12px] font-medium ${style}`}>{label}</span>
+                        {row.provider === 'simulated' ? <span className="ml-2 text-[12px] text-brand-amber">Test</span> : null}
+                      </td>
+                      <td className="py-3 font-mono text-[12.5px] text-fg-dim">
+                        <CopyButton text={row.id}/>
+                      </td>
                     </tr>;
                   })}
                 </tbody>
@@ -551,15 +591,22 @@ export default function AccountPage() {
             </div>
           )
         ) : (
-          <p className="mt-4 text-[14.5px] text-fg-muted">No payments yet. When you buy a plan, the receipt and its order reference appear here.</p>
+          <div className="mt-6 rounded-field bg-white/[0.02] p-6 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+            <p className="text-[14.5px] text-fg-muted">No payments yet. When you buy a plan, the receipt and its order reference appear here.</p>
+            {!paid ? <Button to="/pricing" size="sm" className="mt-4" magnetic={false}>View Plans</Button> : null}
+          </div>
         )}
       </div>
     </Reveal>
 
+    {/* Security & Password */}
     <Reveal delay={0.11}>
-      <AccountSecurity email={user.email} provider={user.provider}/>
+      <div id="security" className="scroll-mt-24">
+        <AccountSecurity email={user.email} provider={user.provider}/>
+      </div>
     </Reveal>
 
+    {/* Download Your Data */}
     <Reveal delay={0.12}>
       <YourData entitlements={entitlements}/>
     </Reveal>

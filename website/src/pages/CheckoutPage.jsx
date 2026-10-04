@@ -9,6 +9,7 @@ import { billing, waitForPayment } from '../lib/billing.js';
 import { priceOf, useCatalog } from '../lib/catalog.js';
 import { COUNTRIES } from '../lib/countries.js';
 import { formatMoney, useCurrency } from '../lib/currency.js';
+import { LEGAL_VERSION } from '../legal/outarchPolicies.js';
 import { Link, useRouter } from '../lib/router.jsx';
 import { website } from '../lib/supabase.js';
 
@@ -456,6 +457,7 @@ export default function CheckoutPage() {
         name: name.trim(),
         termsAccepted: true,
         termsAcceptedAt,
+        termsVersion: LEGAL_VERSION,
         returnUrl: `${window.location.origin}/checkout/return`,
         upgradeAccepted,
         carriedOverDays: quote?.carriedOver || 0,

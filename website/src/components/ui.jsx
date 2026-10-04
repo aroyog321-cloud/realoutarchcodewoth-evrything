@@ -5,7 +5,7 @@ import { Link } from '../lib/router.jsx';
 export const EASE = [0.16, 1, 0.3, 1];
 
 // Enter on scroll: content rises into place the first time it is seen.
-export function Reveal({ children, delay = 0, y = 24, className = '', as = 'div', amount = 0.25 }) {
+export function Reveal({ children, delay = 0, y = 24, className = '', as = 'div', amount = 0.05 }) {
   const reduce = useReducedMotion();
   const Tag = motion[as] || motion.div;
   return <Tag

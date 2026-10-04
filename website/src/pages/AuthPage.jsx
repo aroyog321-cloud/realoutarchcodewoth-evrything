@@ -5,6 +5,7 @@ import { BrandIcon, Wordmark } from '../components/Brand.jsx';
 import { EASE } from '../components/ui.jsx';
 import { clientFor, isDesktopFlow, website } from '../lib/supabase.js';
 import { desktopCallback, desktopState, takeRedirectTokensOnce } from '../lib/desktopHandoff.js';
+import { LEGAL_VERSION } from '../legal/outarchPolicies.js';
 import { useRouter } from '../lib/router.jsx';
 
 // Sign in, create an account, or reset password, with email and password or Google.
@@ -143,7 +144,7 @@ export default function AuthPage() {
             data: {
               terms_accepted: true,
               terms_accepted_at: new Date().toISOString(),
-              terms_version: '2026-10-01',
+              terms_version: LEGAL_VERSION,
             },
           });
         }
@@ -282,7 +283,7 @@ export default function AuthPage() {
               full_name: name.trim() || undefined,
               terms_accepted: true,
               terms_accepted_at: acceptedAt,
-              terms_version: '2026-10-01',
+              terms_version: LEGAL_VERSION,
             },
             emailRedirectTo: returnUrl(),
           },

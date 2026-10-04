@@ -23,11 +23,16 @@ function reply(status: number, body: unknown): Response {
 
 // Product ID → plan + period lookup
 const PRODUCT_MAP: Record<string, { plan: string; period: string }> = {
-  // Live products
+  // Live USD products
   "pdt_0Nov3J3YiTwFKjr6EsslN": { plan: "pro",      period: "month" },
   "pdt_0Nov3J7j5e01EyiKgomhA": { plan: "pro",      period: "year"  },
   "pdt_0Nov3JCi7Wi4Hd3g6UH37": { plan: "ultimate", period: "month" },
   "pdt_0Nov3JFSpuBh3MPl5TBlJ": { plan: "ultimate", period: "year"  },
+  // Live INR products
+  "pdt_0Nov6xCmVxAVN95qaQHvJ": { plan: "pro",      period: "month" },
+  "pdt_0Nov6xFQR8ygUzTeybAYY": { plan: "pro",      period: "year"  },
+  "pdt_0Nov6xGt5LEolOQtQTe4O": { plan: "ultimate", period: "month" },
+  "pdt_0Nov6xJ6Zi4tTRi9rEHT4": { plan: "ultimate", period: "year"  },
   // Test products
   "pdt_0NohxyGlqUEFWQEpCzug5": { plan: "pro",      period: "month" },
   "pdt_0NohxyIVrgAJKAwIfAfCi": { plan: "pro",      period: "year"  },
@@ -131,17 +136,16 @@ Deno.serve(async (request: Request) => {
     if (!supabaseUrl || !serviceKey) return reply(503, { error: "Supabase service role unconfigured" });
 
     const webhookSecret = Deno.env.get("DODO_WEBHOOK_SECRET");
-    const raw = await request.text();
+    if (!webhookSecret) {
+      console.error("[dodo-webhook] DODO_WEBHOOK_SECRET is not configured. Rejecting request with 503.");
+      return reply(503, { error: "Webhook verification unavailable" });
+    }
 
-    // Signature verification (if webhook secret is configured)
-    if (webhookSecret) {
-      const verification = await verifyDodoWebhookSignature(raw, request.headers, webhookSecret);
-      if (!verification.valid) {
-        console.warn("[dodo-webhook] Signature verification failed:", verification.reason);
-        return reply(401, { error: "Unauthorized", reason: verification.reason });
-      }
-    } else {
-      console.warn("[dodo-webhook] DODO_WEBHOOK_SECRET is not set; running without signature verification.");
+    const raw = await request.text();
+    const verification = await verifyDodoWebhookSignature(raw, request.headers, webhookSecret);
+    if (!verification.valid) {
+      console.warn("[dodo-webhook] Signature verification failed:", verification.reason);
+      return reply(401, { error: "Unauthorized", reason: verification.reason });
     }
 
     const admin = createClient(supabaseUrl, serviceKey, {
@@ -176,51 +180,32 @@ Deno.serve(async (request: Request) => {
 
     console.log(`[dodo-webhook] ${eventType}`, JSON.stringify(data).slice(0, 400));
 
-    // ── Identify the customer ──────────────────────────────────────────────────
+    // ── Identify the customer & payment identifiers ───────────────────────────
     const customerEmail = String(data?.customer?.email || data?.customer_email || data?.email || "").trim().toLowerCase();
     const customerName  = String(data?.customer?.name  || data?.customer_name  || "").trim();
     const metadata      = data?.metadata || {};
 
-    let userId: string | null = metadata?.userId || null;
-
     const paymentId = String(data?.payment_id || data?.id || "");
     const sessionId = String(data?.session_id || data?.checkout_session_id || "");
 
-    // Resolve plan/period from metadata first, then product ID, then amount heuristic
-    const rawProductId = String(data?.product_id || data?.product_cart?.[0]?.product_id || "");
-    const mappedProduct = PRODUCT_MAP[rawProductId] || null;
-
-    const rawAmount = data?.total_amount ?? data?.amount ?? data?.payment?.total_amount ?? data?.payment?.amount ?? data?.product_cart?.[0]?.amount ?? 0;
-    const amount   = Number(rawAmount) / 100;
-    const currency = String(data?.currency || data?.billing_currency || "USD").toUpperCase();
-
-    // Priority order: explicit metadata > product ID map > amount heuristic
-    const plan   = String(metadata?.plan   || mappedProduct?.plan   || (amount >= 10 && currency === "USD" ? "ultimate" : amount >= 1000 && currency === "INR" ? "ultimate" : "pro"));
-    const period = String(metadata?.period || mappedProduct?.period || "month");
-
     const userNote = customerEmail ? `${customerEmail}${customerName ? ` (${customerName})` : ""}` : null;
 
-    // 1. Resolve userId from existing payment record (most reliable)
-    if (!userId && sessionId) {
-      const { data: payRow } = await admin.from("payments").select("user_id").eq("provider_order_id", sessionId).maybeSingle();
-      if (payRow?.user_id) userId = payRow.user_id;
+    // ── Resolve existing OUTARCH payment order (authoritative) ────────────────
+    let existingPay: any = null;
+    if (sessionId) {
+      const { data: p } = await admin.from("payments").select("*").eq("provider_order_id", sessionId).maybeSingle();
+      if (p) existingPay = p;
+    }
+    if (!existingPay && paymentId) {
+      const { data: p } = await admin.from("payments").select("*").eq("provider_payment_id", paymentId).maybeSingle();
+      if (p) existingPay = p;
     }
 
-    // 2. Resolve by email in profiles
+    let userId: string | null = existingPay?.user_id || metadata?.userId || null;
+
     if (!userId && customerEmail) {
       const { data: profRow } = await admin.from("profiles").select("id").ilike("email", customerEmail).maybeSingle();
       if (profRow?.id) userId = profRow.id;
-    }
-
-    // 3. Fallback: search auth.users directly
-    if (!userId && customerEmail) {
-      try {
-        const { data: usersData } = await admin.auth.admin.listUsers();
-        const found = usersData?.users?.find((u: any) => u.email?.toLowerCase() === customerEmail);
-        if (found) userId = found.id;
-      } catch (e) {
-        console.warn("[dodo-webhook] listUsers error:", e);
-      }
     }
 
     let processResult: any = null;
@@ -235,189 +220,105 @@ Deno.serve(async (request: Request) => {
       case "subscription.renewed":
       case "subscription.unpaused":
       case "subscription.plan_changed": {
-        if (!userId) {
-          console.warn(`[dodo-webhook] ${eventType}: no userId resolved for email=${customerEmail}`);
-          processResult = { received: true, event: eventType, status: "no_user" };
+        if (!existingPay) {
+          console.warn(`[dodo-webhook] ${eventType}: No matching OUTARCH payment order found for sessionId=${sessionId}, paymentId=${paymentId}. Holding event without automated entitlement.`);
+          processResult = { received: true, event: eventType, status: "held_for_review" };
           break;
         }
 
-        // Fetch current subscription to compute carry-over
-        const { data: existingSub } = await admin
-          .from("subscriptions")
-          .select("current_period_end, plan_id, status")
-          .eq("user_id", userId)
-          .maybeSingle();
+        const payUserId = existingPay.user_id;
+        const plan = existingPay.plan_id;
+        const period = existingPay.period;
+        const expectedAmount = Number(existingPay.amount);
+        const expectedCurrency = String(existingPay.currency || "USD").toUpperCase();
 
-        const currentEndMs = existingSub?.current_period_end
-          ? new Date(existingSub.current_period_end).getTime()
-          : 0;
-
-        let durationDays = period === "year" ? 365 : 30;
-        let carriedOver = 0;
-        let baseTime = Date.now();
-
-        if (existingSub?.plan_id === plan && existingSub?.status === "active" && currentEndMs > Date.now()) {
-          // Same plan renewal — stack
-          baseTime = currentEndMs;
-        } else if (existingSub?.plan_id === "pro" && plan === "ultimate" && existingSub?.status === "active" && currentEndMs > Date.now()) {
-          // Pro → Ultimate upgrade — credit 70% of remaining Pro days
-          const proDaysRemaining = (currentEndMs - Date.now()) / 86400000;
-          carriedOver = Math.round(proDaysRemaining * 0.70 * 10) / 10;
-          durationDays += Math.round(carriedOver);
+        // Validate currency against stored payment order
+        const receivedCurrency = String(data?.currency || data?.billing_currency || expectedCurrency).toUpperCase();
+        if (receivedCurrency !== expectedCurrency) {
+          console.error(`[dodo-webhook] Currency mismatch for order ${existingPay.id}: expected ${expectedCurrency}, received ${receivedCurrency}`);
+          processResult = { received: true, event: eventType, status: "currency_mismatch" };
+          break;
         }
 
-        const periodEnd = new Date(baseTime + durationDays * 86400000).toISOString();
-
-        // Find or create the payment row for this session
-        let targetOrderId: string | null = null;
-        let isExistingRow = false;
-
-        if (sessionId) {
-          const { data: existingPay } = await admin
-            .from("payments")
-            .select("id")
-            .eq("provider_order_id", sessionId)
-            .maybeSingle();
-          if (existingPay?.id) { targetOrderId = existingPay.id; isExistingRow = true; }
+        // Validate amount against stored payment order
+        const rawAmount = data?.total_amount ?? data?.amount ?? data?.payment?.total_amount ?? data?.payment?.amount ?? data?.product_cart?.[0]?.amount ?? 0;
+        const receivedAmount = Number(rawAmount) / 100;
+        if (receivedAmount > 0 && expectedAmount > 0 && receivedAmount < expectedAmount * 0.98) {
+          console.error(`[dodo-webhook] Amount underpaid for order ${existingPay.id}: expected ${expectedAmount}, received ${receivedAmount}`);
+          processResult = { received: true, event: eventType, status: "amount_underpaid" };
+          break;
         }
-
-        if (!targetOrderId && paymentId) {
-          const { data: existingPay } = await admin
-            .from("payments")
-            .select("id")
-            .eq("provider_payment_id", paymentId)
-            .eq("user_id", userId)
-            .maybeSingle();
-          if (existingPay?.id) { targetOrderId = existingPay.id; isExistingRow = true; }
-        }
-
-        const noteText = carriedOver > 0
-          ? `${userNote || "User"} | Upgrade: ${carriedOver} days carried over from Pro`
-          : userNote;
 
         const resolvedPaymentMethod =
-          String(data?.payment_method_type || data?.payment_method || data?.payment?.payment_method_type || data?.payment?.payment_method || data?.payment_type || "dodo").toLowerCase();
+          String(data?.payment_method_type || data?.payment_method || data?.payment?.payment_method_type || data?.payment?.payment_method || data?.payment_type || "dodopayments").toLowerCase();
 
-        if (isExistingRow && targetOrderId) {
-          // Update existing draft → paid
-          await admin.from("payments").update({
-            status: "paid",
-            paid_at: new Date().toISOString(),
-            plan_id: plan,
-            amount: amount || undefined,
-            currency: currency || undefined,
-            provider_payment_id: paymentId || undefined,
-            payment_method: resolvedPaymentMethod,
-            note: noteText,
-            period_start: new Date().toISOString(),
-            period_end: periodEnd,
-            updated_at: new Date().toISOString(),
-          }).eq("id", targetOrderId);
-        } else {
-          // New payment row
-          const newOrderId = `oa_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
-          await admin.from("payments").insert({
-            id: newOrderId,
-            user_id: userId,
-            plan_id: plan,
-            period,
-            months: period === "year" ? 12 : 1,
-            currency: currency || "USD",
-            amount: amount || 0,
-            provider: "dodopayments",
-            environment: "production",
-            status: "paid",
-            paid_at: new Date().toISOString(),
-            provider_order_id: sessionId || null,
-            provider_payment_id: paymentId || null,
-            payment_method: resolvedPaymentMethod,
-            note: noteText,
-            period_start: new Date().toISOString(),
-            period_end: periodEnd,
-          }).catch((e: any) => console.error("[dodo-webhook] payment insert error:", e));
+        // Delegate exclusively to public.apply_payment(...) in database for lock, validation, purchase_outcome and subscription update
+        const { data: applyResult, error: applyErr } = await admin.rpc("apply_payment", {
+          p_order: existingPay.id,
+          p_payment_id: paymentId || existingPay.provider_payment_id || null,
+          p_method: resolvedPaymentMethod,
+          p_amount: existingPay.amount,
+          p_currency: existingPay.currency,
+        });
+
+        if (applyErr) {
+          console.error(`[dodo-webhook] apply_payment failed for order ${existingPay.id}:`, applyErr.message);
+          return reply(500, { error: "Database failed to apply payment", details: applyErr.message });
         }
 
-        // Activate / extend subscription
-        // NOTE: status must be 'active' (subscriptions constraint uses 'active', 'canceled' with ONE L)
-        const { error: subErr } = await admin.from("subscriptions").upsert({
-          user_id: userId,
-          plan_id: plan,
-          status: "active",
-          current_period_end: periodEnd,
-          provider: "dodopayments",
-          provider_reference: targetOrderId,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" });
-
-        if (subErr) {
-          console.error("[dodo-webhook] Subscription upsert error:", subErr);
-        } else {
-          console.log(`[dodo-webhook] ✅ Activated ${plan}/${period} for user=${userId} until ${periodEnd} (carried=${carriedOver}d)`);
-        }
+        console.log(`[dodo-webhook] ✅ apply_payment succeeded for order=${existingPay.id}:`, applyResult);
 
         // Sync contact info to profile
         const customerPhone = String(data?.customer?.phone_number || data?.customer?.phone || metadata?.phone || "").trim();
         if (customerPhone || customerName) {
           try {
-            await admin.auth.admin.updateUserById(userId, {
+            await admin.auth.admin.updateUserById(payUserId, {
               user_metadata: {
                 ...(customerPhone ? { phone: customerPhone } : {}),
                 ...(customerName  ? { full_name: customerName } : {}),
               },
             });
           } catch (e) { console.error("[dodo-webhook] Auth metadata sync error:", e); }
-          await admin.from("profiles").upsert({
-            id: userId,
-            email: customerEmail || undefined,
-            ...(customerName  ? { full_name: customerName  } : {}),
-            ...(customerPhone ? { phone: customerPhone } : {}),
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "id" }).catch((e: any) => console.error("[dodo-webhook] Profile sync error:", e));
+
+          try {
+            await admin.from("profiles").upsert({
+              id: payUserId,
+              email: customerEmail || undefined,
+              ...(customerName  ? { full_name: customerName  } : {}),
+              ...(customerPhone ? { phone: customerPhone } : {}),
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "id" });
+          } catch (e) {
+            console.error("[dodo-webhook] Profile sync error:", e);
+          }
         }
 
-        processResult = { success: true, event: eventType, user: userId, plan, periodEnd };
+        processResult = {
+          success: true,
+          event: eventType,
+          user: payUserId,
+          orderId: existingPay.id,
+          plan: applyResult?.planId || existingPay.plan_id,
+          periodEnd: applyResult?.periodEnd,
+        };
         break;
       }
 
       // ── Payment failure ────────────────────────────────────────────────────
       case "payment.failed":
       case "payment.cancelled": {
-        if (userId && (sessionId || paymentId)) {
-          const query = sessionId
-            ? admin.from("payments").select("id").eq("provider_order_id", sessionId).maybeSingle()
-            : admin.from("payments").select("id").eq("provider_payment_id", paymentId).eq("user_id", userId).maybeSingle();
-
-          const { data: existingPay } = await query;
-
-          if (existingPay?.id) {
-            await admin.from("payments").update({
-              status: "failed",
-              ...(amount > 0 ? { amount } : {}),
-              last_event: eventType,
-              provider_payment_id: paymentId || undefined,
-              updated_at: new Date().toISOString(),
-            }).eq("id", existingPay.id);
-          } else {
-            const failOrderId = `oa_${Date.now().toString(36)}_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
-            await admin.from("payments").insert({
-              id: failOrderId,
-              user_id: userId,
-              plan_id: plan,
-              period,
-              months: period === "year" ? 12 : 1,
-              currency: currency || "USD",
-              amount: amount || 0.01,
-              provider: "dodopayments",
-              environment: "production",
-              status: "failed",
-              provider_order_id: sessionId || null,
-              provider_payment_id: paymentId || null,
-              note: userNote,
-              last_event: eventType,
-            }).catch((e: any) => console.error("[dodo-webhook] failure insert error:", e));
-          }
+        if (existingPay?.id) {
+          const rawAmount = data?.total_amount ?? data?.amount ?? data?.payment?.total_amount ?? data?.payment?.amount ?? 0;
+          const failedAmount = Number(rawAmount) / 100;
+          await admin.from("payments").update({
+            status: "failed",
+            ...(failedAmount > 0 ? { amount: failedAmount } : {}),
+            last_event: eventType,
+            provider_payment_id: paymentId || undefined,
+            updated_at: new Date().toISOString(),
+          }).eq("id", existingPay.id);
         }
-        console.log(`[dodo-webhook] ❌ ${eventType} for user=${userId || "unknown"}`);
+        console.log(`[dodo-webhook] ❌ ${eventType} for order=${existingPay?.id || "unknown"} user=${userId || "unknown"}`);
         processResult = { success: true, event: eventType };
         break;
       }
