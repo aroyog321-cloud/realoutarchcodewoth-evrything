@@ -32,21 +32,23 @@ export const FALLBACK_PRICES = [
   { plan_id: 'ultimate', period: 'year', currency: 'USD', amount: 104.2, months: 12 },
 ];
 
-// The 12-character Store ID Partner Center shows under Product identity. Once
-// the admin sets app_config.microsoft_store_id, Windows downloads go through
-// the Microsoft Store instead of the ZIP.
+export const DEFAULT_MICROSOFT_STORE_ID = '9PLVP4HLNJZQ';
+export const MICROSOFT_STORE_PAGE_URL = 'https://apps.microsoft.com/store/detail/9PLVP4HLNJZQ?cid=DevShareMCLPCS';
+
+// The 12-character Store ID Partner Center shows under Product identity.
 export function microsoftStoreIdOf(value) {
   const id = typeof value === 'string' ? value.trim().toUpperCase() : '';
-  return /^[0-9A-Z]{12}$/.test(id) ? id : '';
+  return /^[0-9A-Z]{12}$/.test(id) ? id : DEFAULT_MICROSOFT_STORE_ID;
 }
 
-// "Direct" launch mode starts the Microsoft Store web installer: a small
-// installer, signed by Microsoft, that installs OUTARCH through the Store.
+// "Direct" launch mode starts the Microsoft Store web installer, while listing
+// opens the official Microsoft Store product detail page.
 export function microsoftStoreLinks(id) {
-  if (!id) return null;
+  const storeId = id ? (microsoftStoreIdOf(id) || DEFAULT_MICROSOFT_STORE_ID) : DEFAULT_MICROSOFT_STORE_ID;
   return {
-    install: `https://apps.microsoft.com/detail/${id}?mode=direct`,
-    listing: `https://apps.microsoft.com/detail/${id}`,
+    install: `https://apps.microsoft.com/store/detail/${storeId}?cid=DevShareMCLPCS`,
+    direct: `https://apps.microsoft.com/detail/${storeId}?mode=direct&cid=DevShareMCLPCS`,
+    listing: `https://apps.microsoft.com/store/detail/${storeId}?cid=DevShareMCLPCS`,
   };
 }
 
@@ -72,7 +74,7 @@ function loadCatalog() {
         release: releases[0] || null,
         supportEmail: typeof settings.support_email === 'string' ? settings.support_email : '',
         androidApkUrl: typeof settings.android_apk_url === 'string' && /^https:\/\//.test(settings.android_apk_url) ? settings.android_apk_url : '',
-        microsoftStoreId: microsoftStoreIdOf(settings.microsoft_store_id),
+        microsoftStoreId: settings.microsoft_store_id ? microsoftStoreIdOf(settings.microsoft_store_id) : DEFAULT_MICROSOFT_STORE_ID,
         live: Boolean(plans.length),
       };
     });
@@ -81,7 +83,7 @@ function loadCatalog() {
 }
 
 export function useCatalog() {
-  const [catalog, setCatalog] = useState({ plans: FALLBACK_PLANS, prices: FALLBACK_PRICES, release: null, supportEmail: '', androidApkUrl: '', microsoftStoreId: '', live: false, loading: true });
+  const [catalog, setCatalog] = useState({ plans: FALLBACK_PLANS, prices: FALLBACK_PRICES, release: null, supportEmail: '', androidApkUrl: '', microsoftStoreId: DEFAULT_MICROSOFT_STORE_ID, live: false, loading: true });
   useEffect(() => {
     let alive = true;
     loadCatalog().then(result => { if (alive) setCatalog({ ...result, loading: false }); });

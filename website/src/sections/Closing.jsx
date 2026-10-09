@@ -60,8 +60,7 @@ export function DownloadSection() {
           <div className="relative mt-auto pt-9">
             {store
               ? <div className="flex flex-wrap items-center gap-3">
-                <Button href={store.install} size="lg" cursor="Get it"><DownloadSimple size={19} weight="bold"/>Download for Windows</Button>
-                <a href={store.listing} target="_blank" rel="noreferrer" className="link-underline text-[14px] text-fg-muted hover:text-fg">View in the Microsoft Store</a>
+                <Button href={store.install} target="_blank" rel="noreferrer" size="lg" cursor="Get it"><DownloadSimple size={19} weight="bold"/>Download from Microsoft Store</Button>
               </div>
               : release
               ? <div className="flex flex-wrap items-center gap-3">
@@ -121,16 +120,16 @@ export function DownloadSection() {
 const NODE_22_URL = 'https://nodejs.org/dist/latest-v22.x/';
 
 const STORE_STEPS = [
-  ['Download for Windows', 'Your browser saves a small installer from Microsoft. Open it.'],
-  ['The Microsoft Store installs OUTARCH', 'Signed and delivered by Microsoft. Nothing else to set up, and no Node.js needed.'],
+  ['Open Microsoft Store page', 'Click the download button to visit the official OUTARCH page on the Microsoft Store.'],
+  ['Click the Download button', 'On the Microsoft Store page, click Download / Install. Microsoft signs and installs OUTARCH automatically with zero setup.'],
   ['Sign in when OUTARCH opens', 'The app opens this website so you can create a free account or sign in, then your browser sends you back.'],
-  ['Open your project', 'Add your terminals and agents. The Store keeps OUTARCH up to date.'],
+  ['Open your project', 'Add your terminals and agents. The Microsoft Store keeps OUTARCH automatically up to date.'],
 ];
 
 const FAQ = [
   ['What is OUTARCH?', 'A command center for your development work on Windows. It runs your terminals, dev servers, tests and AI coding agents in one window, watches them, and tells you when one needs a decision.'],
   ['Is it for vibe coding with AI agents?', 'Yes. Run Claude Code, Codex, Gemini CLI or any CLI agent, several at once, and OUTARCH tells you when one needs an answer. It runs everything else that lives in a terminal too: dev servers, test watchers, databases and plain shells.'],
-  ['What platforms does it support?', 'Windows 11. The first run needs Node.js 22 (22.12 or newer) to install what OUTARCH uses. macOS and Linux are not supported yet.'],
+  ['What platforms does it support?', 'Windows 10 and 11. You can install it directly from the Microsoft Store with one click. macOS and Linux are not supported yet.'],
   ['Does my code leave my computer?', 'Not unless you use Mission AI. Your terminals, files and the engine run on your computer. When you ask Mission AI something, the context it needs, including any project files it reads to answer you, goes to the AI model you chose. It skips files that hold secrets, and terminal output is included only if you allow it.'],
   ['Which agents work with it?', 'Any agent with a command line runs in an OUTARCH terminal. Permission alerts recognize Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, OpenCode, Goose and Aider. Claude Code, Codex, Gemini CLI and OpenCode also have one-click setup.'],
   ['What happens when an agent needs permission?', 'OUTARCH plays a sound and shows a notice, plus a Windows notification if the app is in the background. One click opens that agent\'s terminal, where you answer as usual. The notice clears as soon as you do.'],
